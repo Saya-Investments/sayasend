@@ -41,6 +41,33 @@ async function apiCall<T>(
   }
 }
 
+async function internalApiCall<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<ApiResponse<T>> {
+  try {
+    const response = await fetch(endpoint, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || `API error: ${response.status} ${response.statusText}`)
+    }
+
+    return { success: true, data: data.data }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error(`Internal API call failed: ${errorMessage}`)
+    return { success: false, error: errorMessage }
+  }
+}
+
 /**
  * Fetch campaigns from Cloud Run
  */
@@ -117,4 +144,23 @@ export async function getContactsByFilters(filters: {
  */
 export async function getCampaignMetrics(campaignId: string) {
   return apiCall(`/api/campaigns/${campaignId}/metrics`)
+}
+
+export async function getBigQueryDatabases() {
+  return internalApiCall('/api/bigquery/databases')
+}
+
+export async function getBigQueryContacts(filters: {
+  databaseName: string
+  segmento?: string
+  estrategia?: string
+}) {
+  const queryParams = new URLSearchParams({
+    databaseName: filters.databaseName,
+  })
+
+  if (filters.segmento) queryParams.append('segmento', filters.segmento)
+  if (filters.estrategia) queryParams.append('estrategia', filters.estrategia)
+
+  return internalApiCall(`/api/bigquery/contacts?${queryParams.toString()}`)
 }

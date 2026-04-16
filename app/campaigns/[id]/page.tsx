@@ -47,6 +47,9 @@ export default function CampaignDetailPage({ params }: CampaignDetailPageProps) 
 
   // Build preview message
   let previewMessage = template.content
+  const formatContactDate = (value: string | Date | null) =>
+    value ? new Date(value).toLocaleDateString() : '-'
+
   if (campaignContacts.length > 0) {
     const firstContact = campaignContacts[0]
     template.variables.forEach(variable => {
@@ -67,7 +70,7 @@ export default function CampaignDetailPage({ params }: CampaignDetailPageProps) 
       contact.telefono,
       contact.segmento,
       contact.monto,
-      new Date(contact.fechaUltimoPago).toLocaleDateString(),
+      formatContactDate(contact.fechaUltimoPago),
     ])
 
     const csvContent = [
@@ -177,7 +180,7 @@ export default function CampaignDetailPage({ params }: CampaignDetailPageProps) 
                         ${contact.monto.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {new Date(contact.fechaUltimoPago).toLocaleDateString()}
+                        {formatContactDate(contact.fechaUltimoPago)}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -1,200 +1,312 @@
 'use client'
 
-import { useState } from 'react'
-import { mockTemplates, mockContacts } from '@/lib/mockData'
+import { useEffect, useState } from 'react'
+
+import { getBigQueryContacts, getBigQueryDatabases } from '@/lib/api'
+import { mockTemplates } from '@/lib/mockData'
+import type { BigQueryColumn, BigQueryContactsPayload, BigQueryDatabase } from '@/lib/types'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import type { Template } from '@/lib/types'
+import { Spinner } from '@/components/ui/spinner'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 export function CampaignForm() {
   const [campaignName, setCampaignName] = useState('')
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
-  const [segmento, setSegmento] = useState<string>('all')
-  const [estrategia, setEstrategia] = useState<string>('all')
+  const [selectedTemplate, setSelectedTemplate] = useState('')
+  const [databaseName, setDatabaseName] = useState('')
+  const [segmento, setSegmento] = useState('')
+  const [estrategia, setEstrategia] = useState('')
   const [showContacts, setShowContacts] = useState(false)
   const [variableMappings, setVariableMappings] = useState<Record<string, string>>({})
+  const [databases, setDatabases] = useState<BigQueryDatabase[]>([])
+  const [availableColumns, setAvailableColumns] = useState<BigQueryColumn[]>([])
+  const [contactsPayload, setContactsPayload] = useState<BigQueryContactsPayload>({
+    columns: [],
+    contacts: [],
+  })
+  const [isLoadingDatabases, setIsLoadingDatabases] = useState(true)
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
-  const currentTemplate = mockTemplates.find(t => t.id === selectedTemplate)
+  const currentTemplate = mockTemplates.find((template) => template.id === selectedTemplate)
+  const filteredContacts = contactsPayload.contacts
 
-  const getFilteredContacts = () => {
-    return mockContacts.filter(contact => {
-      const segmentoMatch = segmento === 'all' || contact.segmento === segmento
-      const estrategiaMatch = estrategia === 'all' || true // Estrategia is a placeholder filter
-      return segmentoMatch && estrategiaMatch
-    })
+  useEffect(() => {
+    const loadDatabases = async () => {
+      setIsLoadingDatabases(true)
+      setErrorMessage('')
+
+      const response = await getBigQueryDatabases()
+
+      if (!response.success || !response.data) {
+        setDatabases([])
+        setErrorMessage(response.error || 'No se pudieron cargar las tablas desde BigQuery.')
+        setIsLoadingDatabases(false)
+        return
+      }
+
+      setDatabases(response.data as BigQueryDatabase[])
+      setIsLoadingDatabases(false)
+    }
+
+    loadDatabases()
+  }, [])
+
+  const resetContactSelection = () => {
+    setShowContacts(false)
+    setContactsPayload({ columns: [], contacts: [] })
+    setAvailableColumns([])
+    setVariableMappings({})
   }
 
-  const filteredContacts = getFilteredContacts()
+  const handleApplyFilters = async () => {
+    if (!databaseName) {
+      setErrorMessage('Selecciona una base de datos para consultar clientes.')
+      return
+    }
 
-  const handleApplyFilters = () => {
+    setIsLoadingContacts(true)
     setShowContacts(true)
+    setErrorMessage('')
+
+    const response = await getBigQueryContacts({
+      databaseName,
+      segmento: segmento || undefined,
+      estrategia: estrategia || undefined,
+    })
+
+    if (!response.success || !response.data) {
+      setContactsPayload({ columns: [], contacts: [] })
+      setAvailableColumns([])
+      setErrorMessage(response.error || 'No se pudieron cargar clientes desde BigQuery.')
+      setIsLoadingContacts(false)
+      return
+    }
+
+    const payload = response.data as BigQueryContactsPayload
+    setContactsPayload(payload)
+    setAvailableColumns(payload.columns)
+    setVariableMappings({})
+    setIsLoadingContacts(false)
   }
 
   const handleVariableMappingChange = (placeholder: string, columnName: string) => {
-    setVariableMappings(prev => ({
-      ...prev,
-      [placeholder]: columnName
+    setVariableMappings((previousMappings) => ({
+      ...previousMappings,
+      [placeholder]: columnName,
     }))
   }
 
   const getPreviewMessage = () => {
     if (!currentTemplate || filteredContacts.length === 0) return ''
-    
+
     let message = currentTemplate.content
     const firstContact = filteredContacts[0]
-    
-    currentTemplate.variables.forEach(variable => {
+
+    currentTemplate.variables.forEach((variable) => {
       const mappedColumn = variableMappings[variable.placeholder]
+
       if (mappedColumn) {
-        const value = (firstContact as any)[mappedColumn] || 'N/A'
+        const value = firstContact[mappedColumn] || 'N/A'
         message = message.replace(variable.placeholder, String(value))
       }
     })
-    
+
     return message
   }
 
-  const canCreateCampaign = campaignName && selectedTemplate && filteredContacts.length > 0 && Object.keys(variableMappings).length === currentTemplate?.variables.length
+  const canCreateCampaign =
+    campaignName &&
+    databaseName &&
+    selectedTemplate &&
+    filteredContacts.length > 0 &&
+    Object.keys(variableMappings).length === currentTemplate?.variables.length
 
   return (
     <div className="space-y-8">
-      {/* Datos Básicos */}
       <Card>
         <CardHeader>
-          <CardTitle>Datos Básicos</CardTitle>
+          <CardTitle>Datos Basicos</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="campaign-name">Nombre de la Campaña</Label>
               <Input
                 id="campaign-name"
-                placeholder="e.g., Campaña Premium Marzo"
+                placeholder="Ej. Campaña Premium Marzo"
                 value={campaignName}
-                onChange={(e) => setCampaignName(e.target.value)}
+                onChange={(event) => setCampaignName(event.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="database">Base de Datos</Label>
-              <Input
-                id="database"
-                placeholder="clientes_pdb"
-                disabled
-                className="bg-muted"
-              />
+              <Select
+                value={databaseName}
+                onValueChange={(value) => {
+                  setDatabaseName(value)
+                  resetContactSelection()
+                }}
+                disabled={isLoadingDatabases}
+              >
+                <SelectTrigger id="database" className="w-full">
+                  <SelectValue
+                    placeholder={
+                      isLoadingDatabases ? 'Cargando tablas de BigQuery...' : 'Selecciona una tabla'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {databases.map((database) => (
+                    <SelectItem key={database.id} value={database.name}>
+                      {database.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {isLoadingDatabases && (
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Spinner className="size-3" />
+                  Consultando tablas del dataset `CDV_COL`
+                </p>
+              )}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Segmentación */}
       <Card>
         <CardHeader>
-          <CardTitle>Segmentación</CardTitle>
-          <CardDescription>Filter customers by segment and strategy</CardDescription>
+          <CardTitle>Segmentacion</CardTitle>
+          <CardDescription>Consulta clientes desde BigQuery usando la tabla seleccionada</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="segmento">Segmento</Label>
-              <Select value={segmento} onValueChange={setSegmento}>
-                <SelectTrigger id="segmento">
-                  <SelectValue placeholder="Select segment" />
+              <Select value={segmento || 'all'} onValueChange={(value) => setSegmento(value === 'all' ? '' : value)}>
+                <SelectTrigger id="segmento" className="w-full">
+                  <SelectValue placeholder="Selecciona un segmento" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="Premium">Premium</SelectItem>
-                  <SelectItem value="Standard">Standard</SelectItem>
+                  <SelectItem value="ALTA">ALTA</SelectItem>
+                  <SelectItem value="MEDIA">MEDIA</SelectItem>
+                  <SelectItem value="BAJA">BAJA</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="estrategia">Estrategia</Label>
-              <Select value={estrategia} onValueChange={setEstrategia}>
-                <SelectTrigger id="estrategia">
-                  <SelectValue placeholder="Select strategy" />
+              <Select
+                value={estrategia || 'all'}
+                onValueChange={(value) => setEstrategia(value === 'all' ? '' : value)}
+              >
+                <SelectTrigger id="estrategia" className="w-full">
+                  <SelectValue placeholder="Selecciona una estrategia" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="reactivacion">Reactivación</SelectItem>
-                  <SelectItem value="cobranza">Cobranza</SelectItem>
-                  <SelectItem value="retention">Retención</SelectItem>
+                  <SelectItem value="RETADOR">RETADOR</SelectItem>
+                  <SelectItem value="CONVENCIONAL">CONVENCIONAL</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <Button onClick={handleApplyFilters} className="w-full">
-            Aplicar Filtros
+
+          {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
+
+          <Button
+            onClick={handleApplyFilters}
+            className="w-full"
+            disabled={isLoadingContacts || !databaseName}
+          >
+            {isLoadingContacts ? (
+              <span className="flex items-center justify-center gap-2">
+                <Spinner />
+                Consultando clientes...
+              </span>
+            ) : (
+              'Aplicar Filtros'
+            )}
           </Button>
         </CardContent>
       </Card>
 
-      {/* Contacts Table */}
       {showContacts && (
         <Card>
           <CardHeader>
             <CardTitle>Clientes ({filteredContacts.length})</CardTitle>
-            <CardDescription>Customers matching your filters</CardDescription>
+            <CardDescription>Clientes obtenidos desde BigQuery para la tabla {databaseName}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border border-border rounded-lg overflow-hidden overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted">
-                    <TableHead>Código Asociado</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Teléfono</TableHead>
-                    <TableHead>Segmento</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead>Último Pago</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredContacts.map((contact) => (
-                    <TableRow key={contact.codigoAsociado} className="hover:bg-muted/50">
-                      <TableCell className="font-mono text-sm">{contact.codigoAsociado}</TableCell>
-                      <TableCell className="font-medium">{contact.nombre}</TableCell>
-                      <TableCell>{contact.telefono}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{contact.segmento}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        ${contact.monto.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(contact.fechaUltimoPago).toLocaleDateString()}
-                      </TableCell>
+            {filteredContacts.length === 0 && !isLoadingContacts ? (
+              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                No se encontraron clientes con esos filtros.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted">
+                      <TableHead>Codigo Asociado</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Telefono</TableHead>
+                      <TableHead>Segmento</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead>Ultimo Pago</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredContacts.map((contact, index) => (
+                      <TableRow
+                        key={contact.codigoAsociado || `${contact.nombre}-${index}`}
+                        className="hover:bg-muted/50"
+                      >
+                        <TableCell className="font-mono text-sm">{contact.codigoAsociado || '-'}</TableCell>
+                        <TableCell className="font-medium">{contact.nombre || '-'}</TableCell>
+                        <TableCell>{contact.telefono || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{contact.segmento || '-'}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          ${Number(contact.monto || 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {contact.fechaUltimoPago
+                            ? new Date(String(contact.fechaUltimoPago)).toLocaleDateString()
+                            : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Template Selection and Variable Mapping */}
       {showContacts && (
         <Card>
           <CardHeader>
             <CardTitle>Plantilla de Mensaje</CardTitle>
-            <CardDescription>Select template and map variables</CardDescription>
+            <CardDescription>Selecciona una plantilla y mapea columnas reales de BigQuery</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="template">Seleccionar Plantilla</Label>
               <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                <SelectTrigger id="template">
-                  <SelectValue placeholder="Select a template" />
+                <SelectTrigger id="template" className="w-full">
+                  <SelectValue placeholder="Selecciona una plantilla" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockTemplates.map(template => (
+                  {mockTemplates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.name}
                     </SelectItem>
@@ -204,70 +316,59 @@ export function CampaignForm() {
             </div>
 
             {currentTemplate && (
-              <>
-                {/* Variable Mapping */}
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-semibold mb-3">Mapeo de Variables</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {currentTemplate.variables.map((variable) => (
-                        <div key={variable.id} className="space-y-2">
-                          <Label htmlFor={`var-${variable.id}`}>
-                            {variable.name} ({variable.placeholder})
-                          </Label>
-                          <Select
-                            value={variableMappings[variable.placeholder] || ''}
-                            onValueChange={(value) => handleVariableMappingChange(variable.placeholder, value)}
-                          >
-                            <SelectTrigger id={`var-${variable.id}`}>
-                              <SelectValue placeholder="Select column" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="nombre">Nombre</SelectItem>
-                              <SelectItem value="telefono">Teléfono</SelectItem>
-                              <SelectItem value="segmento">Segmento</SelectItem>
-                              <SelectItem value="monto">Monto</SelectItem>
-                              <SelectItem value="codigoAsociado">Código Asociado</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <Separator className="my-4" />
-
-                  {/* Preview */}
-                  <div>
-                    <h3 className="font-semibold mb-3">Vista Previa</h3>
-                    <div className="bg-muted p-4 rounded-lg border border-border min-h-24">
-                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-                        {getPreviewMessage() || 'Map all variables to see preview'}
-                      </p>
-                    </div>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="mb-3 font-semibold">Mapeo de Variables</h3>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {currentTemplate.variables.map((variable) => (
+                      <div key={variable.id} className="space-y-2">
+                        <Label htmlFor={`var-${variable.id}`}>
+                          {variable.name} ({variable.placeholder})
+                        </Label>
+                        <Select
+                          value={variableMappings[variable.placeholder] || ''}
+                          onValueChange={(value) =>
+                            handleVariableMappingChange(variable.placeholder, value)
+                          }
+                        >
+                          <SelectTrigger id={`var-${variable.id}`} className="w-full">
+                            <SelectValue placeholder="Selecciona una columna" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableColumns.map((column) => (
+                              <SelectItem key={column.name} value={column.name}>
+                                {column.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </>
+
+                <Separator className="my-4" />
+
+                <div>
+                  <h3 className="mb-3 font-semibold">Vista Previa</h3>
+                  <div className="min-h-24 rounded-lg border border-border bg-muted p-4">
+                    <p className="text-sm break-words whitespace-pre-wrap text-foreground">
+                      {getPreviewMessage() || 'Mapea todas las variables para ver la vista previa'}
+                    </p>
+                  </div>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* Create Campaign Button */}
       {showContacts && (
         <div className="flex gap-3">
-          <Button
-            size="lg"
-            disabled={!canCreateCampaign}
-            className="flex-1"
-          >
+          <Button size="lg" disabled={!canCreateCampaign} className="flex-1">
             Crear Campaña
           </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            className="flex-1"
-          >
+          <Button size="lg" variant="outline" className="flex-1">
             Cancelar
           </Button>
         </div>

@@ -16,12 +16,19 @@ export interface Template {
 }
 
 export interface CampaignContact {
+  [key: string]: unknown
   codigoAsociado: string
+  dni?: string
   nombre: string
   telefono: string
   segmento: string
+  estrategia?: string
   monto: number
-  fechaUltimoPago: Date
+  probabilidad?: number
+  fechaAsamblea?: string | Date
+  fechaVencimiento?: string | Date
+  fecUltPagCcap?: string | Date
+  fechaUltimoPago: string | Date | null
 }
 
 export interface Campaign {
@@ -57,4 +64,19 @@ export interface CampaignDetail extends Campaign {
   template: Template
   contacts: CampaignContact[]
   metrics: ContactabilityMetrics
+}
+
+export interface BigQueryDatabase {
+  id: string
+  name: string
+}
+
+export interface BigQueryColumn {
+  name: string
+  type: string
+}
+
+export interface BigQueryContactsPayload {
+  columns: BigQueryColumn[]
+  contacts: CampaignContact[]
 }
