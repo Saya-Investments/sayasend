@@ -4,7 +4,7 @@ SET search_path TO sayasend;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS clientes (
+CREATE TABLE IF NOT EXISTS sayasend.clientes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     codigo_asociado VARCHAR(50) NOT NULL,
     dni VARCHAR(20) NOT NULL,
@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS clientes (
     fecha_asamblea DATE,
     fecha_vencimiento DATE,
     fec_ult_pag_ccap DATE,
+    mes VARCHAR(20),
     created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_clientes_codigo_asociado UNIQUE (codigo_asociado),
@@ -26,15 +27,15 @@ CREATE TABLE IF NOT EXISTS clientes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_clientes_segmento
-    ON clientes (segmento);
+    ON sayasend.clientes (segmento);
 
 CREATE INDEX IF NOT EXISTS idx_clientes_estrategia
-    ON clientes (estrategia);
+    ON sayasend.clientes (estrategia);
 
 CREATE INDEX IF NOT EXISTS idx_clientes_fecha_vencimiento
-    ON clientes (fecha_vencimiento);
+    ON sayasend.clientes (fecha_vencimiento);
 
-CREATE TABLE IF NOT EXISTS templates (
+CREATE TABLE IF NOT EXISTS sayasend.templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nombre VARCHAR(120) NOT NULL,
     descripcion TEXT,
@@ -44,10 +45,10 @@ CREATE TABLE IF NOT EXISTS templates (
     CONSTRAINT uq_templates_nombre UNIQUE (nombre)
 );
 
-CREATE TABLE IF NOT EXISTS campaigns (
+CREATE TABLE IF NOT EXISTS sayasend.campaigns (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nombre VARCHAR(150) NOT NULL,
-    template_id UUID NOT NULL REFERENCES templates(id),
+    template_id UUID NOT NULL REFERENCES sayasend.templates(id),
     database_name VARCHAR(100) NOT NULL DEFAULT 'clientes',
     send_mode VARCHAR(2) NOT NULL,
     segmento_filter VARCHAR(50),
@@ -66,26 +67,16 @@ CREATE TABLE IF NOT EXISTS campaigns (
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaigns_status
-    ON campaigns (status);
+    ON sayasend.campaigns (status);
 
 CREATE INDEX IF NOT EXISTS idx_campaigns_template
-    ON campaigns (template_id);
+    ON sayasend.campaigns (template_id);
 
-CREATE TABLE IF NOT EXISTS campaign_variable_mappings (
+
+CREATE TABLE IF NOT EXISTS sayasend.campaign_contacts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-    placeholder VARCHAR(30) NOT NULL,
-    source_column VARCHAR(100) NOT NULL,
-    CONSTRAINT uq_campaign_mapping UNIQUE (campaign_id, placeholder)
-);
-
-CREATE INDEX IF NOT EXISTS idx_campaign_variable_mappings_campaign
-    ON campaign_variable_mappings (campaign_id);
-
-CREATE TABLE IF NOT EXISTS campaign_contacts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-    cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    campaign_id UUID NOT NULL REFERENCES sayasend.campaigns(id) ON DELETE CASCADE,
+    cliente_id UUID NOT NULL REFERENCES sayasend.clientes(id) ON DELETE CASCADE,
     personalized_message TEXT,
     send_status VARCHAR(20) NOT NULL DEFAULT 'pending',
     sent_at TIMESTAMP WITHOUT TIME ZONE,
@@ -100,10 +91,10 @@ CREATE TABLE IF NOT EXISTS campaign_contacts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaign_contacts_campaign
-    ON campaign_contacts (campaign_id);
+    ON sayasend.campaign_contacts (campaign_id);
 
 CREATE INDEX IF NOT EXISTS idx_campaign_contacts_status
-    ON campaign_contacts (send_status);
+    ON sayasend.campaign_contacts (send_status);
 
 CREATE OR REPLACE VIEW vw_campaign_metrics AS
 SELECT
@@ -129,8 +120,8 @@ SELECT
         / NULLIF(COUNT(cc.id), 0),
         2
     ) AS failure_rate
-FROM campaigns c
-LEFT JOIN campaign_contacts cc
+FROM sayasend.campaigns c
+LEFT JOIN sayasend.campaign_contacts cc
     ON cc.campaign_id = c.id
 GROUP BY c.id, c.nombre;
 
@@ -142,29 +133,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_clientes_updated_at ON clientes;
+DROP TRIGGER IF EXISTS trg_clientes_updated_at ON sayasend.clientes;
 CREATE TRIGGER trg_clientes_updated_at
-BEFORE UPDATE ON clientes
+BEFORE UPDATE ON sayasend.clientes
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_templates_updated_at ON templates;
+DROP TRIGGER IF EXISTS trg_templates_updated_at ON sayasend.templates;
 CREATE TRIGGER trg_templates_updated_at
-BEFORE UPDATE ON templates
+BEFORE UPDATE ON sayasend.templates
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
-INSERT INTO templates (nombre, descripcion, contenido)
-VALUES
-    (
-        'Premio PD Baja',
-        'Plantilla promocional para clientes con probabilidad baja.',
-        'Hola {{1}}, con tu pago puntual de {{2}} avanzas y puedes entrar a la Ruleta Ganadora. Codigo: {{3}}.'
-    ),
-    (
-        'Recordatorio de Pago',
-        'Plantilla de recordatorio de pago.',
-        'Hola {{1}}, te recordamos que tu pago de {{2}} esta por vencer.'
-    )
-ON CONFLICT DO NOTHING;
 
