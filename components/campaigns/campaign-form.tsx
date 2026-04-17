@@ -2,9 +2,14 @@
 
 import { useEffect, useState } from 'react'
 
-import { getBigQueryContacts, getBigQueryDatabases } from '@/lib/api'
+import { createCampaign, getBigQueryContacts, getBigQueryDatabases } from '@/lib/api'
 import { mockTemplates } from '@/lib/mockData'
-import type { BigQueryColumn, BigQueryContactsPayload, BigQueryDatabase } from '@/lib/types'
+import type {
+  BigQueryColumn,
+  BigQueryContactsPayload,
+  BigQueryDatabase,
+  CreateCampaignPayload,
+} from '@/lib/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +19,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
+function formatDate(value: string | Date | null | undefined) {
+  if (!value) {
+    return '-'
+  }
+
+  return new Date(value).toLocaleDateString()
+}
 
 export function CampaignForm() {
   const [campaignName, setCampaignName] = useState('')
@@ -31,10 +44,13 @@ export function CampaignForm() {
   })
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(true)
   const [isLoadingContacts, setIsLoadingContacts] = useState(false)
+  const [isCreatingCampaign, setIsCreatingCampaign] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
 
   const currentTemplate = mockTemplates.find((template) => template.id === selectedTemplate)
   const filteredContacts = contactsPayload.contacts
+  const needsTemplateMappings = !!currentTemplate
 
   useEffect(() => {
     const loadDatabases = async () => {
@@ -62,6 +78,7 @@ export function CampaignForm() {
     setContactsPayload({ columns: [], contacts: [] })
     setAvailableColumns([])
     setVariableMappings({})
+    setSuccessMessage('')
   }
 
   const handleApplyFilters = async () => {
@@ -73,6 +90,7 @@ export function CampaignForm() {
     setIsLoadingContacts(true)
     setShowContacts(true)
     setErrorMessage('')
+    setSuccessMessage('')
 
     const response = await getBigQueryContacts({
       databaseName,
@@ -120,12 +138,64 @@ export function CampaignForm() {
     return message
   }
 
+  const handleCreateCampaign = async () => {
+    if (!campaignName.trim()) {
+      setErrorMessage('Ingresa un nombre para la campaña.')
+      return
+    }
+
+    if (!databaseName) {
+      setErrorMessage('Selecciona una base de datos.')
+      return
+    }
+
+    if (filteredContacts.length === 0) {
+      setErrorMessage('No hay clientes para guardar en la campaña.')
+      return
+    }
+
+    if (
+      needsTemplateMappings &&
+      Object.keys(variableMappings).length !== currentTemplate.variables.length
+    ) {
+      setErrorMessage('Completa el mapeo de variables de la plantilla.')
+      return
+    }
+
+    setIsCreatingCampaign(true)
+    setErrorMessage('')
+    setSuccessMessage('')
+
+    const payload: CreateCampaignPayload = {
+      name: campaignName.trim(),
+      templateId: selectedTemplate || null,
+      databaseName,
+      segmentFilters: {
+        segmento: segmento || undefined,
+        estrategia: estrategia || undefined,
+      },
+      variableMappings,
+      contacts: filteredContacts,
+    }
+
+    const response = await createCampaign(payload)
+
+    if (!response.success) {
+      setErrorMessage(response.error || 'No se pudo crear la campaña.')
+      setIsCreatingCampaign(false)
+      return
+    }
+
+    setSuccessMessage(`Campaña creada correctamente con ${filteredContacts.length} clientes.`)
+    setIsCreatingCampaign(false)
+  }
+
   const canCreateCampaign =
-    campaignName &&
-    databaseName &&
-    selectedTemplate &&
+    !!campaignName.trim() &&
+    !!databaseName &&
     filteredContacts.length > 0 &&
-    Object.keys(variableMappings).length === currentTemplate?.variables.length
+    (!needsTemplateMappings ||
+      Object.keys(variableMappings).length === currentTemplate.variables.length)
 
   return (
     <div className="space-y-8">
@@ -139,7 +209,7 @@ export function CampaignForm() {
               <Label htmlFor="campaign-name">Nombre de la Campaña</Label>
               <Input
                 id="campaign-name"
-                placeholder="Ej. Campaña Premium Marzo"
+                placeholder="Ej. Campaña Premium Abril"
                 value={campaignName}
                 onChange={(event) => setCampaignName(event.target.value)}
               />
@@ -183,13 +253,16 @@ export function CampaignForm() {
       <Card>
         <CardHeader>
           <CardTitle>Segmentacion</CardTitle>
-          <CardDescription>Consulta clientes desde BigQuery usando la tabla seleccionada</CardDescription>
+          <CardDescription>Filtra la tabla seleccionada por segmento y gestion</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="segmento">Segmento</Label>
-              <Select value={segmento || 'all'} onValueChange={(value) => setSegmento(value === 'all' ? '' : value)}>
+              <Select
+                value={segmento || 'all'}
+                onValueChange={(value) => setSegmento(value === 'all' ? '' : value)}
+              >
                 <SelectTrigger id="segmento" className="w-full">
                   <SelectValue placeholder="Selecciona un segmento" />
                 </SelectTrigger>
@@ -220,12 +293,9 @@ export function CampaignForm() {
           </div>
 
           {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
+          {successMessage && <p className="text-sm text-green-600">{successMessage}</p>}
 
-          <Button
-            onClick={handleApplyFilters}
-            className="w-full"
-            disabled={isLoadingContacts || !databaseName}
-          >
+          <Button onClick={handleApplyFilters} className="w-full" disabled={isLoadingContacts || !databaseName}>
             {isLoadingContacts ? (
               <span className="flex items-center justify-center gap-2">
                 <Spinner />
@@ -242,7 +312,7 @@ export function CampaignForm() {
         <Card>
           <CardHeader>
             <CardTitle>Clientes ({filteredContacts.length})</CardTitle>
-            <CardDescription>Clientes obtenidos desde BigQuery para la tabla {databaseName}</CardDescription>
+            <CardDescription>Clientes cruzados desde BigQuery para la tabla {databaseName}</CardDescription>
           </CardHeader>
           <CardContent>
             {filteredContacts.length === 0 && !isLoadingContacts ? (
@@ -255,11 +325,17 @@ export function CampaignForm() {
                   <TableHeader>
                     <TableRow className="bg-muted">
                       <TableHead>Codigo Asociado</TableHead>
+                      <TableHead>Num Doc</TableHead>
+                      <TableHead>Probabilidad Pago</TableHead>
+                      <TableHead>Segmento</TableHead>
+                      <TableHead>Gestion</TableHead>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Telefono</TableHead>
-                      <TableHead>Segmento</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
-                      <TableHead>Ultimo Pago</TableHead>
+                      <TableHead>Fecha Asamblea</TableHead>
+                      <TableHead>Fecha Vencimiento</TableHead>
+                      <TableHead>Mes</TableHead>
+                      <TableHead>Fec_Ult_Pag_CCAP</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -269,19 +345,21 @@ export function CampaignForm() {
                         className="hover:bg-muted/50"
                       >
                         <TableCell className="font-mono text-sm">{contact.codigoAsociado || '-'}</TableCell>
-                        <TableCell className="font-medium">{contact.nombre || '-'}</TableCell>
-                        <TableCell>{contact.telefono || '-'}</TableCell>
+                        <TableCell>{contact.numDoc || '-'}</TableCell>
+                        <TableCell>{contact.probabilidadPago ?? 0}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{contact.segmento || '-'}</Badge>
                         </TableCell>
+                        <TableCell>{contact.gestion || '-'}</TableCell>
+                        <TableCell className="font-medium">{contact.nombre || '-'}</TableCell>
+                        <TableCell>{contact.telefono || '-'}</TableCell>
                         <TableCell className="text-right">
                           ${Number(contact.monto || 0).toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {contact.fechaUltimoPago
-                            ? new Date(String(contact.fechaUltimoPago)).toLocaleDateString()
-                            : '-'}
-                        </TableCell>
+                        <TableCell>{formatDate(contact.fechaAsamblea)}</TableCell>
+                        <TableCell>{formatDate(contact.fechaVencimiento)}</TableCell>
+                        <TableCell>{contact.mes || '-'}</TableCell>
+                        <TableCell>{formatDate(contact.fecUltPagCcap)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -296,16 +374,23 @@ export function CampaignForm() {
         <Card>
           <CardHeader>
             <CardTitle>Plantilla de Mensaje</CardTitle>
-            <CardDescription>Selecciona una plantilla y mapea columnas reales de BigQuery</CardDescription>
+            <CardDescription>La plantilla es opcional; si eliges una, completa el mapeo</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="template">Seleccionar Plantilla</Label>
-              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+              <Select
+                value={selectedTemplate || 'none'}
+                onValueChange={(value) => {
+                  setSelectedTemplate(value === 'none' ? '' : value)
+                  setVariableMappings({})
+                }}
+              >
                 <SelectTrigger id="template" className="w-full">
                   <SelectValue placeholder="Selecciona una plantilla" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Sin plantilla</SelectItem>
                   {mockTemplates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.name}
@@ -365,10 +450,27 @@ export function CampaignForm() {
 
       {showContacts && (
         <div className="flex gap-3">
-          <Button size="lg" disabled={!canCreateCampaign} className="flex-1">
-            Crear Campaña
+          <Button
+            size="lg"
+            disabled={!canCreateCampaign || isCreatingCampaign}
+            className="flex-1"
+            onClick={handleCreateCampaign}
+          >
+            {isCreatingCampaign ? (
+              <span className="flex items-center justify-center gap-2">
+                <Spinner />
+                Guardando campaña...
+              </span>
+            ) : (
+              'Crear Campaña'
+            )}
           </Button>
-          <Button size="lg" variant="outline" className="flex-1">
+          <Button
+            size="lg"
+            variant="outline"
+            className="flex-1"
+            onClick={resetContactSelection}
+          >
             Cancelar
           </Button>
         </div>

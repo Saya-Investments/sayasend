@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Eye } from 'lucide-react'
 
 export function CampaignsList() {
-  const getTemplateNameById = (templateId: string) => {
+  const getTemplateNameById = (templateId: string | null) => {
+    if (!templateId) return 'Sin plantilla'
     return mockTemplates.find(t => t.id === templateId)?.name || 'Unknown'
   }
 

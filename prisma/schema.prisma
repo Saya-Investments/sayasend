@@ -8,7 +8,7 @@ datasource db {
 
 model Cliente {
   id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  codigoAsociado   String            @unique(map: "uq_clientes_codigo_asociado") @map("codigo_asociado") @db.VarChar(50)
+  codigoAsociado   String            @unique(map: "uq_clientes_codigo_asociado") @map("codigo_asociado") @db.VarChar(150)
   dni              String            @unique(map: "uq_clientes_dni") @db.VarChar(20)
   telefono         String            @db.VarChar(20)
   nombre           String            @db.VarChar(150)
@@ -45,9 +45,9 @@ model Template {
 model Campaign {
   id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nombre           String            @db.VarChar(150)
-  templateId       String            @map("template_id") @db.Uuid
+  templateId       String?           @map("template_id") @db.Uuid
   databaseName     String            @default("clientes") @map("database_name") @db.VarChar(100)
-  sendMode         String            @map("send_mode") @db.VarChar(2)
+  sendMode         String?           @map("send_mode") @db.VarChar(2)
   segmentoFilter   String?           @map("segmento_filter") @db.VarChar(50)
   estrategiaFilter String?           @map("estrategia_filter") @db.VarChar(50)
   totalContacts    Int               @default(0) @map("total_contacts")
@@ -58,7 +58,7 @@ model Campaign {
   finishedAt       DateTime?         @map("finished_at") @db.Timestamp(6)
   variableMappings Json              @default("{}") @map("variable_mappings")
   campaignContacts CampaignContact[]
-  template         Template          @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  template         Template?         @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([status], map: "idx_campaigns_status")
   @@index([templateId], map: "idx_campaigns_template")

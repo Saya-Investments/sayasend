@@ -86,7 +86,7 @@ export async function getCampaignById(id: string) {
  * Create a new campaign
  */
 export async function createCampaign(campaignData: any) {
-  return apiCall('/api/campaigns', {
+  return internalApiCall('/api/campaigns', {
     method: 'POST',
     body: JSON.stringify(campaignData),
   })
