@@ -1,36 +1,45 @@
 'use client'
 
 import Link from 'next/link'
-import { mockCampaigns, mockTemplates } from '@/lib/mockData'
+import { Eye } from 'lucide-react'
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Eye } from 'lucide-react'
 
-export function CampaignsList() {
-  const getTemplateNameById = (templateId: string | null) => {
-    if (!templateId) return 'Sin plantilla'
-    return mockTemplates.find(t => t.id === templateId)?.name || 'Unknown'
-  }
+type CampaignRow = {
+  id: string
+  nombre: string
+  status: string
+  totalContacts: number
+  createdAt: Date | string
+  template: { nombre: string } | null
+  _count?: { campaignContacts: number }
+}
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      draft: 'secondary',
-      scheduled: 'outline',
-      sending: 'default',
-      completed: 'default',
-    }
-    return colors[status] || 'secondary'
-  }
+const STATUS_LABEL: Record<string, string> = {
+  draft: 'Borrador',
+  scheduled: 'Programada',
+  sending: 'Enviando',
+  completed: 'Completada',
+}
 
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      draft: 'Borrador',
-      scheduled: 'Programada',
-      sending: 'Enviando',
-      completed: 'Completada',
-    }
-    return labels[status] || status
+const STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default' | 'destructive'> = {
+  draft: 'secondary',
+  scheduled: 'outline',
+  sending: 'default',
+  completed: 'default',
+}
+
+export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
+  if (campaigns.length === 0) {
+    return (
+      <div className="border border-dashed border-border rounded-lg p-12 text-center">
+        <p className="text-muted-foreground">
+          No hay campañas todavía. Crea una nueva desde el botón de arriba.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -48,17 +57,19 @@ export function CampaignsList() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {mockCampaigns.map((campaign) => (
+            {campaigns.map((campaign) => (
               <TableRow key={campaign.id} className="hover:bg-muted/50">
-                <TableCell className="font-medium">{campaign.name}</TableCell>
-                <TableCell>{getTemplateNameById(campaign.templateId)}</TableCell>
+                <TableCell className="font-medium">{campaign.nombre}</TableCell>
+                <TableCell>{campaign.template?.nombre ?? 'Sin plantilla'}</TableCell>
                 <TableCell>{new Date(campaign.createdAt).toLocaleDateString()}</TableCell>
                 <TableCell>
-                  <Badge variant={getStatusColor(campaign.status) as any}>
-                    {getStatusLabel(campaign.status)}
+                  <Badge variant={STATUS_VARIANT[campaign.status] ?? 'secondary'}>
+                    {STATUS_LABEL[campaign.status] ?? campaign.status}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-right">{campaign.totalContacts}</TableCell>
+                <TableCell className="text-right">
+                  {campaign._count?.campaignContacts ?? campaign.totalContacts}
+                </TableCell>
                 <TableCell className="text-center">
                   <Link href={`/campaigns/${campaign.id}`}>
                     <Button size="sm" variant="ghost" className="gap-2">
