@@ -42,6 +42,7 @@ export interface Campaign {
   segmentFilters: {
     segmento?: string
     estrategia?: string
+    frente?: string
   }
   variableMappings: {
     [variablePlaceholder: string]: string
@@ -90,6 +91,7 @@ export interface CreateCampaignPayload {
   segmentFilters: {
     segmento?: string
     estrategia?: string
+    frente?: string
   }
   variableMappings: {
     [variablePlaceholder: string]: string

@@ -20,6 +20,7 @@ export type BigQueryTableInfo = {
 export type BigQueryContactFilters = {
   segmento?: string
   estrategia?: string
+  frente?: string
 }
 
 let bigQueryClient: BigQuery | null = null
@@ -143,6 +144,48 @@ export async function listBigQueryTables(): Promise<BigQueryTableInfo[]> {
     .sort((left, right) => left.name.localeCompare(right.name))
 }
 
+export async function listBigQueryFrentes(tableName: string): Promise<string[]> {
+  validateTableName(tableName)
+
+  const query = `
+    SELECT DISTINCT CAST(\`Frente\` AS STRING) AS frente
+    FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\`
+    WHERE \`Frente\` IS NOT NULL
+      AND CAST(\`Frente\` AS STRING) != ''
+    ORDER BY frente
+  `
+
+  const [rows] = await getBigQueryClient().query({ query })
+
+  return rows
+    .map((row) => {
+      const serialized = serializeBigQueryValue(row) as Record<string, unknown>
+      return toNullableString(serialized.frente)
+    })
+    .filter((value): value is string => value !== null)
+}
+
+export async function listBigQueryEstrategias(tableName: string): Promise<string[]> {
+  validateTableName(tableName)
+
+  const query = `
+    SELECT DISTINCT CAST(\`estrategia\` AS STRING) AS estrategia
+    FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\`
+    WHERE \`estrategia\` IS NOT NULL
+      AND CAST(\`estrategia\` AS STRING) != ''
+    ORDER BY estrategia
+  `
+
+  const [rows] = await getBigQueryClient().query({ query })
+
+  return rows
+    .map((row) => {
+      const serialized = serializeBigQueryValue(row) as Record<string, unknown>
+      return toNullableString(serialized.estrategia)
+    })
+    .filter((value): value is string => value !== null)
+}
+
 export async function queryBigQueryContacts(
   tableName: string,
   filters: BigQueryContactFilters,
@@ -158,8 +201,13 @@ export async function queryBigQueryContacts(
   }
 
   if (filters.estrategia) {
-    clauses.push('CAST(src.`gestion` AS STRING) = @estrategia')
+    clauses.push('CAST(src.`estrategia` AS STRING) = @estrategia')
     params.estrategia = filters.estrategia
+  }
+
+  if (filters.frente) {
+    clauses.push('CAST(src.`Frente` AS STRING) = @frente')
+    params.frente = filters.frente
   }
 
   const whereClause = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : ''
@@ -174,57 +222,37 @@ export async function queryBigQueryContacts(
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.ciclos_pago\`
       WHERE CURRENT_DATE('America/Bogota') BETWEEN fecha_inicio_ciclo AND fecha_fin_ciclo
       QUALIFY ROW_NUMBER() OVER (ORDER BY fecha_inicio_ciclo DESC) = 1
-    ),
-    morosos AS (
-      SELECT
-        h.DNI,
-        STRING_AGG(DISTINCT CAST(h.Contrato AS STRING), ', ' ORDER BY CAST(h.Contrato AS STRING)) AS Contrato,
-        ANY_VALUE(h.Frente) AS Frente,
-        ANY_VALUE(h.segmento) AS segmento,
-        ANY_VALUE(h.estrategia) AS estrategia,
-        SUM(h.Cuota) AS Cuota,
-        ANY_VALUE(h.Fec_Ult_Pag_CCAP) AS Fec_Ult_Pag_CCAP,
-        ANY_VALUE(h.Zona) AS Zona,
-        ANY_VALUE(h.mes) AS mes
-      FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.Historico_BDfondos_Scoring\` h
-      JOIN \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.ciclos_pago\` c
-        ON h.mes_corte = c.mes_corte_label
-      WHERE CURRENT_DATE('America/Bogota') BETWEEN c.fecha_inicio_ciclo AND c.fecha_fin_ciclo
-        AND (
-          h.Fec_Ult_Pag_CCAP IS NULL
-          OR h.Fec_Ult_Pag_CCAP < c.fecha_inicio_ciclo
-        )
-      GROUP BY h.DNI
     )
     SELECT
-      CAST(src.\`Codigo Asociado\` AS STRING) AS codigoAsociado,
-      CAST(src.\`Num Doc\` AS STRING) AS numDoc,
-      SAFE_CAST(src.\`probabilidad_pago\` AS NUMERIC) AS probabilidadPago,
+      CAST(src.\`Contrato\` AS STRING) AS codigoAsociado,
+      CAST(src.\`DNI\` AS STRING) AS numDoc,
+      SAFE_CAST(src.\`probabilidad\` AS NUMERIC) AS probabilidadPago,
       CAST(src.\`segmento\` AS STRING) AS segmento,
-      CAST(src.\`gestion\` AS STRING) AS gestion,
-      CAST(morosos.Frente AS STRING) AS frente,
+      CAST(src.\`estrategia\` AS STRING) AS gestion,
+      CAST(src.\`Frente\` AS STRING) AS frente,
       CAST(fondos.\`Nombres\` AS STRING) AS nombre,
       CAST(fondos.\`Telf_SMS\` AS STRING) AS telefono,
-      SAFE_CAST(morosos.Cuota AS NUMERIC) AS monto,
+      SAFE_CAST(src.\`Cuota\` AS NUMERIC) AS monto,
       ciclo.fecha_inicio_ciclo AS fechaAsamblea,
       ciclo.fecha_fin_ciclo AS fechaVencimiento,
-      CAST(morosos.mes AS STRING) AS mes,
-      morosos.Fec_Ult_Pag_CCAP AS fecUltPagCcap,
-      morosos.Fec_Ult_Pag_CCAP AS fechaUltimoPago
+      CAST(src.\`mes\` AS STRING) AS mes,
+      src.\`Fec_Ult_Pag_CCAP\` AS fecUltPagCcap,
+      src.\`Fec_Ult_Pag_CCAP\` AS fechaUltimoPago
     FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\` src
-    JOIN morosos
-      ON CAST(src.\`Num Doc\` AS STRING) = CAST(morosos.DNI AS STRING)
-      AND REGEXP_CONTAINS(
-        CONCAT(', ', morosos.Contrato, ', '),
-        CONCAT(', ', CAST(src.\`Codigo Asociado\` AS STRING), ', ')
-      )
+    JOIN ciclo_activo ciclo
+      ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
     LEFT JOIN \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.DB_BDfondos_actual\` fondos
-      ON CAST(src.\`Codigo Asociado\` AS STRING) = CAST(fondos.\`Codigo_Asociado\` AS STRING)
-    CROSS JOIN ciclo_activo ciclo
-    WHERE 1 = 1
+      ON CAST(src.\`Contrato\` AS STRING) = CAST(fondos.\`Codigo_Asociado\` AS STRING)
+    WHERE (
+        src.\`Fec_Ult_Pag_CCAP\` IS NULL
+        OR src.\`Fec_Ult_Pag_CCAP\` < ciclo.fecha_inicio_ciclo
+      )
       ${whereClause}
-    ORDER BY CAST(src.\`segmento\` AS STRING), SAFE_CAST(morosos.Cuota AS NUMERIC) DESC
-    LIMIT 200
+    QUALIFY ROW_NUMBER() OVER (
+      PARTITION BY CAST(src.\`Contrato\` AS STRING)
+      ORDER BY src.\`Fec_Ult_Pag_CCAP\` DESC NULLS LAST
+    ) = 1
+    ORDER BY CAST(src.\`segmento\` AS STRING), SAFE_CAST(src.\`Cuota\` AS NUMERIC) DESC
   `
 
   const [rows] = await getBigQueryClient().query({ query, params })

@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from 'react'
 
-import { createCampaign, getBigQueryContacts, getBigQueryDatabases } from '@/lib/api'
+import {
+  createCampaign,
+  getBigQueryContacts,
+  getBigQueryDatabases,
+  getBigQueryEstrategias,
+  getBigQueryFrentes,
+} from '@/lib/api'
 import { mockTemplates } from '@/lib/mockData'
 import type {
   BigQueryColumn,
@@ -20,9 +26,19 @@ import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
+const CONTACTS_PAGE_SIZE = 15
+
 function formatDate(value: string | Date | null | undefined) {
   if (!value) {
     return '-'
+  }
+
+  if (typeof value === 'string') {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+    if (match) {
+      const [, year, month, day] = match
+      return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString()
+    }
   }
 
   return new Date(value).toLocaleDateString()
@@ -34,6 +50,11 @@ export function CampaignForm() {
   const [databaseName, setDatabaseName] = useState('')
   const [segmento, setSegmento] = useState('')
   const [estrategia, setEstrategia] = useState('')
+  const [frente, setFrente] = useState('')
+  const [frentes, setFrentes] = useState<string[]>([])
+  const [isLoadingFrentes, setIsLoadingFrentes] = useState(false)
+  const [estrategias, setEstrategias] = useState<string[]>([])
+  const [isLoadingEstrategias, setIsLoadingEstrategias] = useState(false)
   const [showContacts, setShowContacts] = useState(false)
   const [variableMappings, setVariableMappings] = useState<Record<string, string>>({})
   const [databases, setDatabases] = useState<BigQueryDatabase[]>([])
@@ -42,6 +63,7 @@ export function CampaignForm() {
     columns: [],
     contacts: [],
   })
+  const [contactsPage, setContactsPage] = useState(1)
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(true)
   const [isLoadingContacts, setIsLoadingContacts] = useState(false)
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false)
@@ -50,6 +72,15 @@ export function CampaignForm() {
 
   const currentTemplate = mockTemplates.find((template) => template.id === selectedTemplate)
   const filteredContacts = contactsPayload.contacts
+  const contactsWithoutPhone = filteredContacts.filter(
+    (contact) => !contact.telefono || String(contact.telefono).trim() === '',
+  ).length
+  const totalPages = Math.max(1, Math.ceil(filteredContacts.length / CONTACTS_PAGE_SIZE))
+  const safePage = Math.min(contactsPage, totalPages)
+  const paginatedContacts = filteredContacts.slice(
+    (safePage - 1) * CONTACTS_PAGE_SIZE,
+    safePage * CONTACTS_PAGE_SIZE,
+  )
   const needsTemplateMappings = !!currentTemplate
 
   useEffect(() => {
@@ -73,12 +104,56 @@ export function CampaignForm() {
     loadDatabases()
   }, [])
 
+  useEffect(() => {
+    if (!databaseName) {
+      setFrentes([])
+      setFrente('')
+      setEstrategias([])
+      setEstrategia('')
+      return
+    }
+
+    const loadFrentes = async () => {
+      setIsLoadingFrentes(true)
+      const response = await getBigQueryFrentes(databaseName)
+
+      if (!response.success || !Array.isArray(response.data)) {
+        setFrentes([])
+        setIsLoadingFrentes(false)
+        return
+      }
+
+      setFrentes(response.data as string[])
+      setIsLoadingFrentes(false)
+    }
+
+    const loadEstrategias = async () => {
+      setIsLoadingEstrategias(true)
+      const response = await getBigQueryEstrategias(databaseName)
+
+      if (!response.success || !Array.isArray(response.data)) {
+        setEstrategias([])
+        setIsLoadingEstrategias(false)
+        return
+      }
+
+      setEstrategias(response.data as string[])
+      setIsLoadingEstrategias(false)
+    }
+
+    loadFrentes()
+    loadEstrategias()
+  }, [databaseName])
+
   const resetContactSelection = () => {
     setShowContacts(false)
     setContactsPayload({ columns: [], contacts: [] })
     setAvailableColumns([])
     setVariableMappings({})
     setSuccessMessage('')
+    setFrente('')
+    setEstrategia('')
+    setContactsPage(1)
   }
 
   const handleApplyFilters = async () => {
@@ -96,6 +171,7 @@ export function CampaignForm() {
       databaseName,
       segmento: segmento || undefined,
       estrategia: estrategia || undefined,
+      frente: frente || undefined,
     })
 
     if (!response.success || !response.data) {
@@ -110,6 +186,7 @@ export function CampaignForm() {
     setContactsPayload(payload)
     setAvailableColumns(payload.columns)
     setVariableMappings({})
+    setContactsPage(1)
     setIsLoadingContacts(false)
   }
 
@@ -173,6 +250,7 @@ export function CampaignForm() {
       segmentFilters: {
         segmento: segmento || undefined,
         estrategia: estrategia || undefined,
+        frente: frente || undefined,
       },
       variableMappings,
       contacts: filteredContacts,
@@ -253,10 +331,10 @@ export function CampaignForm() {
       <Card>
         <CardHeader>
           <CardTitle>Segmentacion</CardTitle>
-          <CardDescription>Filtra la tabla seleccionada por segmento y gestion</CardDescription>
+          <CardDescription>Filtra la tabla seleccionada por segmento, estrategia y frente</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="segmento">Segmento</Label>
               <Select
@@ -279,14 +357,54 @@ export function CampaignForm() {
               <Select
                 value={estrategia || 'all'}
                 onValueChange={(value) => setEstrategia(value === 'all' ? '' : value)}
+                disabled={!databaseName || isLoadingEstrategias}
               >
                 <SelectTrigger id="estrategia" className="w-full">
-                  <SelectValue placeholder="Selecciona una estrategia" />
+                  <SelectValue
+                    placeholder={
+                      !databaseName
+                        ? 'Selecciona una tabla primero'
+                        : isLoadingEstrategias
+                          ? 'Cargando estrategias...'
+                          : 'Selecciona una estrategia'
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="RETADOR">RETADOR</SelectItem>
-                  <SelectItem value="CONVENCIONAL">CONVENCIONAL</SelectItem>
+                  {estrategias.map((estrategiaOption) => (
+                    <SelectItem key={estrategiaOption} value={estrategiaOption}>
+                      {estrategiaOption}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="frente">Frente</Label>
+              <Select
+                value={frente || 'all'}
+                onValueChange={(value) => setFrente(value === 'all' ? '' : value)}
+                disabled={!databaseName || isLoadingFrentes}
+              >
+                <SelectTrigger id="frente" className="w-full">
+                  <SelectValue
+                    placeholder={
+                      !databaseName
+                        ? 'Selecciona una tabla primero'
+                        : isLoadingFrentes
+                          ? 'Cargando frentes...'
+                          : 'Selecciona un frente'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {frentes.map((frenteOption) => (
+                    <SelectItem key={frenteOption} value={frenteOption}>
+                      {frenteOption}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -311,8 +429,19 @@ export function CampaignForm() {
       {showContacts && (
         <Card>
           <CardHeader>
-            <CardTitle>Clientes ({filteredContacts.length})</CardTitle>
-            <CardDescription>Clientes cruzados desde BigQuery para la tabla {databaseName}</CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle>Clientes ({filteredContacts.length})</CardTitle>
+                <CardDescription>
+                  Clientes cruzados desde BigQuery para la tabla {databaseName}
+                </CardDescription>
+              </div>
+              {contactsWithoutPhone > 0 && (
+                <Badge variant="outline" className="border-destructive/40 text-destructive">
+                  Sin telefono: {contactsWithoutPhone}
+                </Badge>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {filteredContacts.length === 0 && !isLoadingContacts ? (
@@ -339,7 +468,7 @@ export function CampaignForm() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredContacts.map((contact, index) => (
+                    {paginatedContacts.map((contact, index) => (
                       <TableRow
                         key={contact.codigoAsociado || `${contact.nombre}-${index}`}
                         className="hover:bg-muted/50"
@@ -354,7 +483,11 @@ export function CampaignForm() {
                         <TableCell className="font-medium">{contact.nombre || '-'}</TableCell>
                         <TableCell>{contact.telefono || '-'}</TableCell>
                         <TableCell className="text-right">
-                          ${Number(contact.monto || 0).toLocaleString()}
+                          {Number(contact.monto || 0).toLocaleString('es-CO', {
+                            style: 'currency',
+                            currency: 'COP',
+                            maximumFractionDigits: 0,
+                          })}
                         </TableCell>
                         <TableCell>{formatDate(contact.fechaAsamblea)}</TableCell>
                         <TableCell>{formatDate(contact.fechaVencimiento)}</TableCell>
@@ -364,6 +497,36 @@ export function CampaignForm() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+            {filteredContacts.length > CONTACTS_PAGE_SIZE && (
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {(safePage - 1) * CONTACTS_PAGE_SIZE + 1}-
+                  {Math.min(safePage * CONTACTS_PAGE_SIZE, filteredContacts.length)} de{' '}
+                  {filteredContacts.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setContactsPage((page) => Math.max(1, page - 1))}
+                    disabled={safePage <= 1}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Pagina {safePage} de {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setContactsPage((page) => Math.min(totalPages, page + 1))}
+                    disabled={safePage >= totalPages}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>

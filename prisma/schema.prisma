@@ -61,6 +61,7 @@ model Campaign {
   sendMode         String            @map("send_mode") @db.VarChar(2)
   segmentoFilter   String?           @map("segmento_filter") @db.VarChar(50)
   estrategiaFilter String?           @map("estrategia_filter") @db.VarChar(50)
+  frenteFilter     String?           @map("frente_filter") @db.VarChar(100)
   totalContacts    Int               @default(0) @map("total_contacts")
   status           String            @default("draft") @db.VarChar(20)
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamp(6)

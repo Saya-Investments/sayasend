@@ -154,6 +154,7 @@ export async function getBigQueryContacts(filters: {
   databaseName: string
   segmento?: string
   estrategia?: string
+  frente?: string
 }) {
   const queryParams = new URLSearchParams({
     databaseName: filters.databaseName,
@@ -161,6 +162,17 @@ export async function getBigQueryContacts(filters: {
 
   if (filters.segmento) queryParams.append('segmento', filters.segmento)
   if (filters.estrategia) queryParams.append('estrategia', filters.estrategia)
+  if (filters.frente) queryParams.append('frente', filters.frente)
 
   return internalApiCall(`/api/bigquery/contacts?${queryParams.toString()}`)
+}
+
+export async function getBigQueryFrentes(databaseName: string) {
+  const queryParams = new URLSearchParams({ databaseName })
+  return internalApiCall(`/api/bigquery/frentes?${queryParams.toString()}`)
+}
+
+export async function getBigQueryEstrategias(databaseName: string) {
+  const queryParams = new URLSearchParams({ databaseName })
+  return internalApiCall(`/api/bigquery/estrategias?${queryParams.toString()}`)
 }

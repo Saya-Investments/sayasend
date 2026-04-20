@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
         databaseName: body.databaseName.trim(),
         segmentoFilter: body.segmentFilters.segmento || null,
         estrategiaFilter: body.segmentFilters.estrategia || null,
+        frenteFilter: body.segmentFilters.frente || null,
         variableMappings: body.variableMappings ?? {},
         totalContacts: body.contacts.length,
         status: 'draft',
