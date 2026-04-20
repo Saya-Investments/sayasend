@@ -22,6 +22,7 @@ export interface CampaignContact {
   probabilidadPago?: number
   segmento: string
   gestion?: string
+  frente?: string | null
   nombre: string
   telefono: string
   monto: number

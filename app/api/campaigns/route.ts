@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
               : toDecimal(contact.probabilidadPago),
           segmento: contact.segmento || null,
           estrategia: contact.gestion || null,
+          frente: contact.frente || null,
           fechaAsamblea: toNullableDate(contact.fechaAsamblea),
           fechaVencimiento: toNullableDate(contact.fechaVencimiento),
           fecUltPagCcap: toNullableDate(contact.fecUltPagCcap),

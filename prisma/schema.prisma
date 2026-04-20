@@ -17,6 +17,7 @@ model Cliente {
   probabilidad     Decimal?          @db.Decimal(5, 2)
   segmento         String?           @db.VarChar(50)
   estrategia       String?           @db.VarChar(50)
+  frente           String?           @db.VarChar(100)
   fechaAsamblea    DateTime?         @map("fecha_asamblea") @db.Date
   fechaVencimiento DateTime?         @map("fecha_vencimiento") @db.Date
   fecUltPagCcap    DateTime?         @map("fec_ult_pag_ccap") @db.Date
@@ -32,20 +33,21 @@ model Cliente {
 }
 
 model Template {
-  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nombre      String     @unique(map: "uq_templates_nombre") @db.VarChar(120)
-  descripcion String?
-  contenido   String
-  metaId      String?    @map("meta_id") @db.VarChar(100)
-  estadoMeta  String?    @map("estado_meta") @db.VarChar(20)
-  categoria   String?    @db.VarChar(30)
-  idioma      String?    @db.VarChar(10)
-  header      String?
-  footer      String?
-  botones     Json?
-  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  campaigns   Campaign[]
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre          String     @unique(map: "uq_templates_nombre") @db.VarChar(120)
+  descripcion     String?
+  contenido       String
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  metaId          String?    @map("meta_id") @db.VarChar(100)
+  estadoMeta      String?    @map("estado_meta") @db.VarChar(20)
+  categoria       String?    @db.VarChar(30)
+  idioma          String?    @db.VarChar(10)
+  header          String?
+  footer          String?
+  botones         Json?
+  bird_project_id String?    @db.VarChar(100)
+  campaigns       Campaign[]
 
   @@index([estadoMeta], map: "idx_templates_estado_meta")
   @@map("templates")
@@ -54,9 +56,9 @@ model Template {
 model Campaign {
   id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nombre           String            @db.VarChar(150)
-  templateId       String?           @map("template_id") @db.Uuid
+  templateId       String            @map("template_id") @db.Uuid
   databaseName     String            @default("clientes") @map("database_name") @db.VarChar(100)
-  sendMode         String?           @map("send_mode") @db.VarChar(2)
+  sendMode         String            @map("send_mode") @db.VarChar(2)
   segmentoFilter   String?           @map("segmento_filter") @db.VarChar(50)
   estrategiaFilter String?           @map("estrategia_filter") @db.VarChar(50)
   totalContacts    Int               @default(0) @map("total_contacts")
@@ -67,8 +69,8 @@ model Campaign {
   finishedAt       DateTime?         @map("finished_at") @db.Timestamp(6)
   variableMappings Json              @default("{}") @map("variable_mappings")
   campaignContacts CampaignContact[]
+  template         Template          @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   mensajeOuts      MensajeOut[]
-  template         Template?         @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([status], map: "idx_campaigns_status")
   @@index([templateId], map: "idx_campaigns_template")
