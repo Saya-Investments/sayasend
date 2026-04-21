@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, RefreshCw, Trash2, Loader2 } from 'lucide-react'
+import { Plus, RefreshCw, Trash2, Loader2, Upload, ImageIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +20,8 @@ type TemplateRow = {
   idioma: string | null
   header: string | null
   footer: string | null
+  headerType: string | null
+  headerMediaUrl: string | null
   createdAt: string
 }
 
@@ -29,6 +31,7 @@ const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
   REJECTED: 'destructive',
   PAUSED: 'outline',
   DISABLED: 'outline',
+  DELETED_IN_META: 'destructive',
 }
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -37,6 +40,7 @@ const ESTADO_LABEL: Record<string, string> = {
   REJECTED: 'Rechazada',
   PAUSED: 'Pausada',
   DISABLED: 'Deshabilitada',
+  DELETED_IN_META: '⚠️ Eliminada en Meta',
 }
 
 export function TemplatesClient({ initialTemplates }: { initialTemplates: TemplateRow[] }) {
@@ -46,6 +50,57 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null,
   )
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const pendingUploadIdRef = useRef<string | null>(null)
+
+  const handleOpenUpload = (templateId: string) => {
+    pendingUploadIdRef.current = templateId
+    fileInputRef.current?.click()
+  }
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    const templateId = pendingUploadIdRef.current
+    // reset para permitir re-seleccionar el mismo archivo después
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (!file || !templateId) return
+
+    if (!file.type.startsWith('image/')) {
+      setFeedback({ type: 'error', message: 'El archivo debe ser una imagen' })
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setFeedback({ type: 'error', message: 'La imagen no puede pesar más de 5MB' })
+      return
+    }
+
+    setUploadingId(templateId)
+    setFeedback(null)
+    try {
+      const form = new FormData()
+      form.append('image', file)
+      const response = await fetch(`/api/templates/${templateId}/image`, {
+        method: 'POST',
+        body: form,
+      })
+      const result = await response.json()
+      if (!result.success) throw new Error(result.error ?? 'Error subiendo imagen')
+      setFeedback({
+        type: 'success',
+        message: 'Imagen actualizada' + (result.previousDeleted ? ' (anterior eliminada del bucket)' : ''),
+      })
+      router.refresh()
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Error desconocido',
+      })
+    } finally {
+      setUploadingId(null)
+      pendingUploadIdRef.current = null
+    }
+  }
 
   const handleSync = async () => {
     setSyncing(true)
@@ -54,11 +109,18 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
       const response = await fetch('/api/templates/sync', { method: 'POST' })
       const result = await response.json()
       if (!result.success) throw new Error(result.error ?? 'Error en sync')
+      const r = result.resumen
+      const partes = [
+        `${r.creadas} creadas`,
+        `${r.actualizadas} actualizadas`,
+      ]
+      if (r.borradas > 0) partes.push(`${r.borradas} borradas`)
+      if (r.marcadasComoEliminadas > 0)
+        partes.push(`${r.marcadasComoEliminadas} marcadas como eliminadas (con campañas asociadas)`)
+      if (r.errores > 0) partes.push(`${r.errores} errores`)
       setFeedback({
         type: 'success',
-        message: `Sincronizado: ${result.resumen.creadas} creadas, ${result.resumen.actualizadas} actualizadas${
-          result.resumen.errores > 0 ? `, ${result.resumen.errores} errores` : ''
-        }`,
+        message: `Sincronizado: ${partes.join(', ')}`,
       })
       router.refresh()
     } catch (error) {
@@ -137,7 +199,12 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
       ) : (
         <div className="space-y-4">
           {initialTemplates.map((t) => (
-            <Card key={t.id} className="hover:shadow-md transition-shadow">
+            <Card
+              key={t.id}
+              className={`hover:shadow-md transition-shadow ${
+                t.estadoMeta === 'DELETED_IN_META' ? 'opacity-60' : ''
+              }`}
+            >
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-2">
@@ -167,9 +234,59 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {t.header && (
+                {t.headerType === 'IMAGE' && t.headerMediaUrl && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Header</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs text-muted-foreground">Header (imagen)</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={uploadingId === t.id}
+                        onClick={() => handleOpenUpload(t.id)}
+                        className="gap-2 h-7 text-xs"
+                      >
+                        {uploadingId === t.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <ImageIcon className="w-3 h-3" />
+                        )}
+                        Reemplazar
+                      </Button>
+                    </div>
+                    <div className="bg-muted p-2 rounded-md border border-border">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={t.headerMediaUrl}
+                        alt={`header de ${t.nombre}`}
+                        className="max-h-40 w-full object-contain rounded"
+                      />
+                    </div>
+                  </div>
+                )}
+                {t.headerType === 'IMAGE' && !t.headerMediaUrl && (
+                  <div className="p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-900 text-sm space-y-2">
+                    <p>
+                      ⚠️ Esta plantilla tiene header IMAGE pero no hay URL guardada.
+                      No se puede enviar hasta que subas una imagen.
+                    </p>
+                    <Button
+                      size="sm"
+                      disabled={uploadingId === t.id}
+                      onClick={() => handleOpenUpload(t.id)}
+                      className="gap-2"
+                    >
+                      {uploadingId === t.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                      Subir imagen
+                    </Button>
+                  </div>
+                )}
+                {t.header && t.headerType !== 'IMAGE' && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Header (texto)</p>
                     <div className="bg-muted p-3 rounded-md border border-border">
                       <p className="text-sm font-semibold">{t.header}</p>
                     </div>
@@ -209,6 +326,15 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
           })
           router.refresh()
         }}
+      />
+
+      {/* Input oculto compartido por todos los botones de "subir/reemplazar imagen" */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={handleFileSelected}
+        className="hidden"
       />
     </div>
   )

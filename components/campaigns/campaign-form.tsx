@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import {
   createCampaign,
@@ -9,13 +9,39 @@ import {
   getBigQueryEstrategias,
   getBigQueryFrentes,
 } from '@/lib/api'
-import { mockTemplates } from '@/lib/mockData'
 import type {
   BigQueryColumn,
   BigQueryContactsPayload,
   BigQueryDatabase,
   CreateCampaignPayload,
 } from '@/lib/types'
+
+type TemplateOption = {
+  id: string
+  nombre: string
+  contenido: string
+  idioma: string | null
+  estadoMeta: string | null
+}
+
+// Extrae los placeholders {{1}}, {{2}}, ... de un template.contenido en orden.
+// Preserva orden por índice numérico, no por aparición (match con la lógica del motor).
+function extractTemplateVariables(contenido: string) {
+  const matches = (contenido.match(/\{\{\s*(\d+)\s*\}\}/g) ?? []).map((m) => ({
+    placeholder: m.replace(/\s+/g, ''),
+    index: m.replace(/[^\d]/g, ''),
+  }))
+  const seen = new Set<string>()
+  const unique: { placeholder: string; index: string }[] = []
+  for (const v of matches) {
+    if (!seen.has(v.index)) {
+      seen.add(v.index)
+      unique.push({ placeholder: `{{${v.index}}}`, index: v.index })
+    }
+  }
+  unique.sort((a, b) => Number(a.index) - Number(b.index))
+  return unique
+}
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,8 +95,14 @@ export function CampaignForm() {
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [templates, setTemplates] = useState<TemplateOption[]>([])
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(true)
 
-  const currentTemplate = mockTemplates.find((template) => template.id === selectedTemplate)
+  const currentTemplate = templates.find((template) => template.id === selectedTemplate)
+  const currentVariables = useMemo(
+    () => (currentTemplate ? extractTemplateVariables(currentTemplate.contenido) : []),
+    [currentTemplate],
+  )
   const filteredContacts = contactsPayload.contacts
   const contactsWithoutPhone = filteredContacts.filter(
     (contact) => !contact.telefono || String(contact.telefono).trim() === '',
@@ -102,6 +134,28 @@ export function CampaignForm() {
     }
 
     loadDatabases()
+  }, [])
+
+  // Cargar templates reales desde la BD. El endpoint filtra por default las
+  // marcadas como DELETED_IN_META para que no aparezcan en el selector.
+  useEffect(() => {
+    const loadTemplates = async () => {
+      setIsLoadingTemplates(true)
+      try {
+        const response = await fetch('/api/templates')
+        const result = await response.json()
+        if (result.success && Array.isArray(result.data)) {
+          setTemplates(result.data as TemplateOption[])
+        } else {
+          setTemplates([])
+        }
+      } catch {
+        setTemplates([])
+      } finally {
+        setIsLoadingTemplates(false)
+      }
+    }
+    loadTemplates()
   }, [])
 
   useEffect(() => {
@@ -200,15 +254,15 @@ export function CampaignForm() {
   const getPreviewMessage = () => {
     if (!currentTemplate || filteredContacts.length === 0) return ''
 
-    let message = currentTemplate.content
+    let message = currentTemplate.contenido
     const firstContact = filteredContacts[0]
 
-    currentTemplate.variables.forEach((variable) => {
+    currentVariables.forEach((variable) => {
       const mappedColumn = variableMappings[variable.placeholder]
 
       if (mappedColumn) {
         const value = firstContact[mappedColumn] || 'N/A'
-        message = message.replace(variable.placeholder, String(value))
+        message = message.replaceAll(variable.placeholder, String(value))
       }
     })
 
@@ -233,7 +287,7 @@ export function CampaignForm() {
 
     if (
       needsTemplateMappings &&
-      Object.keys(variableMappings).length !== currentTemplate.variables.length
+      Object.keys(variableMappings).length !== currentVariables.length
     ) {
       setErrorMessage('Completa el mapeo de variables de la plantilla.')
       return
@@ -273,7 +327,7 @@ export function CampaignForm() {
     !!databaseName &&
     filteredContacts.length > 0 &&
     (!needsTemplateMappings ||
-      Object.keys(variableMappings).length === currentTemplate.variables.length)
+      Object.keys(variableMappings).length === currentVariables.length)
 
   return (
     <div className="space-y-8">
@@ -548,15 +602,25 @@ export function CampaignForm() {
                   setSelectedTemplate(value === 'none' ? '' : value)
                   setVariableMappings({})
                 }}
+                disabled={isLoadingTemplates}
               >
                 <SelectTrigger id="template" className="w-full">
-                  <SelectValue placeholder="Selecciona una plantilla" />
+                  <SelectValue
+                    placeholder={
+                      isLoadingTemplates
+                        ? 'Cargando plantillas...'
+                        : templates.length === 0
+                          ? 'No hay plantillas — sincroniza con Meta primero'
+                          : 'Selecciona una plantilla'
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sin plantilla</SelectItem>
-                  {mockTemplates.map((template) => (
+                  {templates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
-                      {template.name}
+                      {template.nombre}
+                      {template.idioma ? ` (${template.idioma})` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -565,35 +629,41 @@ export function CampaignForm() {
 
             {currentTemplate && (
               <div className="space-y-4">
-                <div>
-                  <h3 className="mb-3 font-semibold">Mapeo de Variables</h3>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {currentTemplate.variables.map((variable) => (
-                      <div key={variable.id} className="space-y-2">
-                        <Label htmlFor={`var-${variable.id}`}>
-                          {variable.name} ({variable.placeholder})
-                        </Label>
-                        <Select
-                          value={variableMappings[variable.placeholder] || ''}
-                          onValueChange={(value) =>
-                            handleVariableMappingChange(variable.placeholder, value)
-                          }
-                        >
-                          <SelectTrigger id={`var-${variable.id}`} className="w-full">
-                            <SelectValue placeholder="Selecciona una columna" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableColumns.map((column) => (
-                              <SelectItem key={column.name} value={column.name}>
-                                {column.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ))}
+                {currentVariables.length > 0 ? (
+                  <div>
+                    <h3 className="mb-3 font-semibold">Mapeo de Variables</h3>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {currentVariables.map((variable) => (
+                        <div key={variable.index} className="space-y-2">
+                          <Label htmlFor={`var-${variable.index}`}>
+                            Variable {variable.placeholder}
+                          </Label>
+                          <Select
+                            value={variableMappings[variable.placeholder] || ''}
+                            onValueChange={(value) =>
+                              handleVariableMappingChange(variable.placeholder, value)
+                            }
+                          >
+                            <SelectTrigger id={`var-${variable.index}`} className="w-full">
+                              <SelectValue placeholder="Selecciona una columna" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableColumns.map((column) => (
+                                <SelectItem key={column.name} value={column.name}>
+                                  {column.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Esta plantilla no tiene variables — se enviará tal cual.
+                  </p>
+                )}
 
                 <Separator className="my-4" />
 
@@ -601,7 +671,10 @@ export function CampaignForm() {
                   <h3 className="mb-3 font-semibold">Vista Previa</h3>
                   <div className="min-h-24 rounded-lg border border-border bg-muted p-4">
                     <p className="text-sm break-words whitespace-pre-wrap text-foreground">
-                      {getPreviewMessage() || 'Mapea todas las variables para ver la vista previa'}
+                      {currentVariables.length === 0
+                        ? currentTemplate.contenido
+                        : getPreviewMessage() ||
+                          'Mapea todas las variables para ver la vista previa'}
                     </p>
                   </div>
                 </div>
