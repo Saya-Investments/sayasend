@@ -20,6 +20,8 @@ type TemplateRow = {
   idioma: string | null
   header: string | null
   footer: string | null
+  headerType: string | null
+  headerMediaUrl: string | null
   createdAt: string
 }
 
@@ -181,9 +183,30 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {t.header && (
+                {t.headerType === 'IMAGE' && t.headerMediaUrl && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Header</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Header (imagen)
+                    </p>
+                    <div className="bg-muted p-2 rounded-md border border-border">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={t.headerMediaUrl}
+                        alt={`header de ${t.nombre}`}
+                        className="max-h-40 w-full object-contain rounded"
+                      />
+                    </div>
+                  </div>
+                )}
+                {t.headerType === 'IMAGE' && !t.headerMediaUrl && (
+                  <div className="p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-900 text-sm">
+                    ⚠️ Esta plantilla tiene header IMAGE pero no hay URL guardada.
+                    No se puede enviar hasta que se suba una imagen.
+                  </div>
+                )}
+                {t.header && t.headerType !== 'IMAGE' && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Header (texto)</p>
                     <div className="bg-muted p-3 rounded-md border border-border">
                       <p className="text-sm font-semibold">{t.header}</p>
                     </div>

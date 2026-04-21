@@ -45,6 +45,11 @@ export async function POST() {
               header: mt.header,
               footer: mt.footer,
               botones: mt.botones ? (mt.botones as object) : undefined,
+              headerType: mt.headerFormat ?? null,
+              // NOTA: no sobreescribimos headerMediaUrl porque esa es la URL
+              // del GCS bucket que se setea al crear la template desde el CRM.
+              // El sync desde Meta solo captura el tipo (IMAGE/VIDEO/etc.), no
+              // la URL del sample — Meta no la expone reliably.
             },
           })
           actualizadas++
@@ -60,6 +65,10 @@ export async function POST() {
               header: mt.header,
               footer: mt.footer,
               botones: mt.botones ? (mt.botones as object) : undefined,
+              headerType: mt.headerFormat ?? null,
+              // headerMediaUrl queda null — si el template tiene IMAGE header
+              // creado en Meta Business Manager (no via nuestro CRM), el admin
+              // deberá agregarle la URL GCS manualmente para poder enviarlo.
             },
           })
           creadas++

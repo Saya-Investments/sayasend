@@ -43,11 +43,13 @@ model Template {
   estadoMeta    String?    @map("estado_meta") @db.VarChar(20)
   categoria     String?    @db.VarChar(30)
   idioma        String?    @db.VarChar(10)
-  header        String?
-  footer        String?
-  botones       Json?
-  birdProjectId String?    @map("bird_project_id") @db.VarChar(100)
-  campaigns     Campaign[]
+  header         String?
+  footer         String?
+  botones        Json?
+  birdProjectId  String?    @map("bird_project_id") @db.VarChar(100)
+  headerType     String?    @map("header_type") @db.VarChar(20)
+  headerMediaUrl String?    @map("header_media_url")
+  campaigns      Campaign[]
 
   @@index([estadoMeta], map: "idx_templates_estado_meta")
   @@map("templates")
