@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Mail, Send } from 'lucide-react'
+import { Mail, Send, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Sidebar() {
@@ -18,6 +18,11 @@ export function Sidebar() {
       title: 'Campañas',
       href: '/campaigns',
       icon: Send,
+    },
+    {
+      title: 'Chat',
+      href: '/chat',
+      icon: MessageCircle,
     },
   ]
 

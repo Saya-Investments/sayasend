@@ -25,6 +25,7 @@ model Cliente {
   updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
   frente           String?           @db.VarChar(100)
   campaignContacts CampaignContact[]
+  chatMessages     ChatMessage[]
 
   @@index([estrategia], map: "idx_clientes_estrategia")
   @@index([fechaVencimiento], map: "idx_clientes_fecha_vencimiento")
@@ -149,4 +150,25 @@ model WebhookLog {
 
   @@index([createdAt(sort: Desc)], map: "idx_webhook_logs_created_at")
   @@map("webhook_logs")
+}
+
+model ChatMessage {
+  id             BigInt    @id @default(autoincrement())
+  wamid          String?   @unique(map: "chat_messages_wamid_key") @db.VarChar(255)
+  direction      String    @db.VarChar(10)
+  phone          String    @db.VarChar(20)
+  clienteId      String?   @map("cliente_id") @db.Uuid
+  messageType    String?   @map("message_type") @db.VarChar(30)
+  textBody       String?   @map("text_body")
+  templateName   String?   @map("template_name") @db.VarChar(120)
+  templateParams Json?     @map("template_params")
+  rawMeta        Json?     @map("raw_meta")
+  tsMeta         DateTime? @map("ts_meta") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  status         String?   @db.VarChar(20)
+  cliente        Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([phone, createdAt(sort: Desc)], map: "idx_chat_messages_phone_created")
+  @@index([clienteId], map: "idx_chat_messages_cliente")
+  @@map("chat_messages")
 }
