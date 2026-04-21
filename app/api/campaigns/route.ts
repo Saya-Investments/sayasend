@@ -68,20 +68,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const campaignData: Prisma.CampaignUncheckedCreateInput = {
-        nombre: body.name.trim(),
-        templateId,
-        databaseName: body.databaseName.trim(),
-        sendMode: (body as { sendMode?: string }).sendMode ?? 'M0',
-        segmentoFilter: body.segmentFilters.segmento || null,
-        estrategiaFilter: body.segmentFilters.estrategia || null,
-        frenteFilter: body.segmentFilters.frente || null,
-        variableMappings: body.variableMappings ?? {},
-        totalContacts: body.contacts.length,
-        status: 'draft',
-      }
-
     const buildClienteData = (contact: CampaignContact) => ({
       codigoAsociado: contact.codigoAsociado,
       dni: contact.numDoc,
@@ -106,20 +92,20 @@ export async function POST(request: NextRequest) {
 
     const result = await prisma.$transaction(
       async (tx) => {
-        const campaign = await tx.campaign.create({
-          data: {
-            nombre: body.name.trim(),
-            templateId,
-            databaseName: body.databaseName.trim(),
-            sendMode: 'M0',
-            segmentoFilter: body.segmentFilters.segmento || null,
-            estrategiaFilter: body.segmentFilters.estrategia || null,
-            frenteFilter: body.segmentFilters.frente || null,
-            variableMappings: body.variableMappings ?? {},
-            totalContacts: body.contacts.length,
-            status: 'draft',
-          },
-        })
+        const campaignData: Prisma.CampaignUncheckedCreateInput = {
+          nombre: body.name.trim(),
+          templateId,
+          databaseName: body.databaseName.trim(),
+          sendMode: (body as { sendMode?: string }).sendMode ?? 'M0',
+          segmentoFilter: body.segmentFilters.segmento || null,
+          estrategiaFilter: body.segmentFilters.estrategia || null,
+          frenteFilter: body.segmentFilters.frente || null,
+          variableMappings: body.variableMappings ?? {},
+          totalContacts: body.contacts.length,
+          status: 'draft',
+        }
+
+        const campaign = await tx.campaign.create({ data: campaignData })
 
         const existingClientes = await tx.cliente.findMany({
           where: {

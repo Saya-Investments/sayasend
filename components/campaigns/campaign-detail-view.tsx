@@ -4,6 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { SendCampaignButton } from './send-campaign-button'
+import { MetricsCards } from '@/components/contactability/metrics-cards'
+import { RateCards } from '@/components/contactability/rate-cards'
+import { ContactabilityCharts } from '@/components/contactability/contactability-charts'
+import { ErrorsChart, type ErrorItem } from '@/components/contactability/errors-chart'
 
 type ClienteLite = {
   id: string
@@ -73,9 +77,11 @@ const CONTACT_STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default'
 export function CampaignDetailView({
   campaign,
   metrics,
+  errors,
 }: {
   campaign: CampaignDetail
   metrics: Metrics | null
+  errors: ErrorItem[]
 }) {
   return (
     <div className="space-y-8">
@@ -114,26 +120,6 @@ export function CampaignDetailView({
           </CardContent>
         </Card>
       </div>
-
-      {metrics && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Métricas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Metric label="Total" value={metrics.total} />
-              <Metric label="Enviados" value={metrics.sent} />
-              <Metric label="Entregados" value={metrics.delivered} />
-              <Metric label="Leídos" value={metrics.read} />
-              <Metric label="Fallidos" value={metrics.failed} />
-              <Metric label="Tasa entrega" value={`${metrics.deliveryRate}%`} />
-              <Metric label="Tasa lectura" value={`${metrics.readRate}%`} />
-              <Metric label="Tasa falla" value={`${metrics.failureRate}%`} />
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>
@@ -189,6 +175,15 @@ export function CampaignDetailView({
           )}
         </CardContent>
       </Card>
+
+      {metrics && (
+        <div className="space-y-6">
+          <MetricsCards metrics={metrics} />
+          <RateCards metrics={metrics} />
+          <ContactabilityCharts metrics={metrics} />
+          <ErrorsChart errors={errors} />
+        </div>
+      )}
     </div>
   )
 }
@@ -202,11 +197,3 @@ function Field({ label, value }: { label: string; value: string }) {
   )
 }
 
-function Metric({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="border border-border rounded-md p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-2xl font-bold">{value}</p>
-    </div>
-  )
-}

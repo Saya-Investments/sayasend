@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 
 import { AppLayout } from '@/components/layout/app-layout'
 import { CampaignDetailView } from '@/components/campaigns/campaign-detail-view'
+import type { ErrorItem } from '@/components/contactability/errors-chart'
 import { Button } from '@/components/ui/button'
 import { prisma } from '@/lib/prisma'
 
@@ -99,6 +100,28 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
     console.warn('[CampaignDetail] no se pudo leer métricas:', (error as Error).message)
   }
 
+  let errors: ErrorItem[] = []
+  try {
+    const errorRows = await prisma.$queryRaw<Array<{ code: string; count: bigint }>>`
+      SELECT
+        (err->>'code')::text AS code,
+        COUNT(*)::bigint AS count
+      FROM sayasend.mensaje_status_event mse
+      JOIN sayasend.mensaje_out mo ON mse.id_msg = mo.id_msg
+      CROSS JOIN LATERAL jsonb_array_elements(mse.errors_json) AS err
+      WHERE mo.campaign_id = ${id}::uuid
+        AND mse.errors_json IS NOT NULL
+        AND jsonb_typeof(mse.errors_json) = 'array'
+        AND err ? 'code'
+      GROUP BY (err->>'code')
+      ORDER BY count DESC
+      LIMIT 10
+    `
+    errors = errorRows.map((r) => ({ code: r.code, count: Number(r.count) }))
+  } catch (error) {
+    console.warn('[CampaignDetail] no se pudieron leer errores:', (error as Error).message)
+  }
+
   return (
     <AppLayout>
       <div className="p-8 space-y-8">
@@ -117,7 +140,7 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
           </div>
         </div>
 
-        <CampaignDetailView campaign={campaign} metrics={metrics} />
+        <CampaignDetailView campaign={campaign} metrics={metrics} errors={errors} />
       </div>
     </AppLayout>
   )
