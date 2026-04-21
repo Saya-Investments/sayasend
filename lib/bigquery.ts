@@ -225,37 +225,60 @@ export async function queryBigQueryContacts(
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.ciclos_pago\`
       WHERE CURRENT_DATE('America/Bogota') BETWEEN fecha_inicio_ciclo AND fecha_fin_ciclo
       QUALIFY ROW_NUMBER() OVER (ORDER BY fecha_inicio_ciclo DESC) = 1
+    ),
+    contratos_pendientes AS (
+      SELECT
+        CAST(src.\`Contrato\` AS STRING) AS contrato,
+        CAST(src.\`DNI\` AS STRING) AS dni,
+        SAFE_CAST(src.\`probabilidad\` AS NUMERIC) AS probabilidad,
+        CAST(src.\`segmento\` AS STRING) AS segmento,
+        CAST(src.\`estrategia\` AS STRING) AS estrategia,
+        CAST(src.\`Frente\` AS STRING) AS frente,
+        SAFE_CAST(src.\`Cuota\` AS NUMERIC) AS cuota,
+        ciclo.fecha_inicio_ciclo AS fecha_asamblea,
+        ciclo.fecha_fin_ciclo AS fecha_vencimiento,
+        CAST(src.\`mes\` AS STRING) AS mes,
+        src.\`Fec_Ult_Pag_CCAP\` AS fec_ult_pag_ccap
+      FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\` src
+      JOIN ciclo_activo ciclo
+        ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
+      WHERE (
+          src.\`Fec_Ult_Pag_CCAP\` IS NULL
+          OR src.\`Fec_Ult_Pag_CCAP\` < ciclo.fecha_inicio_ciclo
+        )
+        ${whereClause}
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY CAST(src.\`Contrato\` AS STRING)
+        ORDER BY src.\`Fec_Ult_Pag_CCAP\` DESC NULLS LAST
+      ) = 1
+    ),
+    contratos_con_fondos AS (
+      SELECT
+        c.*,
+        CAST(fondos.\`Nombres\` AS STRING) AS nombre,
+        CAST(fondos.\`Telefono_2\` AS STRING) AS telefono
+      FROM contratos_pendientes c
+      LEFT JOIN \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.DB_BDfondos_actual\` fondos
+        ON c.contrato = CAST(fondos.\`Codigo_Asociado\` AS STRING)
     )
     SELECT
-      CAST(src.\`Contrato\` AS STRING) AS codigoAsociado,
-      CAST(src.\`DNI\` AS STRING) AS numDoc,
-      SAFE_CAST(src.\`probabilidad\` AS NUMERIC) AS probabilidadPago,
-      CAST(src.\`segmento\` AS STRING) AS segmento,
-      CAST(src.\`estrategia\` AS STRING) AS gestion,
-      CAST(src.\`Frente\` AS STRING) AS frente,
-      CAST(fondos.\`Nombres\` AS STRING) AS nombre,
-      CAST(fondos.\`Telefono_2\` AS STRING) AS telefono,
-      SAFE_CAST(src.\`Cuota\` AS NUMERIC) AS monto,
-      ciclo.fecha_inicio_ciclo AS fechaAsamblea,
-      ciclo.fecha_fin_ciclo AS fechaVencimiento,
-      CAST(src.\`mes\` AS STRING) AS mes,
-      src.\`Fec_Ult_Pag_CCAP\` AS fecUltPagCcap,
-      src.\`Fec_Ult_Pag_CCAP\` AS fechaUltimoPago
-    FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\` src
-    JOIN ciclo_activo ciclo
-      ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
-    LEFT JOIN \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.DB_BDfondos_actual\` fondos
-      ON CAST(src.\`Contrato\` AS STRING) = CAST(fondos.\`Codigo_Asociado\` AS STRING)
-    WHERE (
-        src.\`Fec_Ult_Pag_CCAP\` IS NULL
-        OR src.\`Fec_Ult_Pag_CCAP\` < ciclo.fecha_inicio_ciclo
-      )
-      ${whereClause}
-    QUALIFY ROW_NUMBER() OVER (
-      PARTITION BY CAST(src.\`Contrato\` AS STRING)
-      ORDER BY src.\`Fec_Ult_Pag_CCAP\` DESC NULLS LAST
-    ) = 1
-    ORDER BY CAST(src.\`segmento\` AS STRING), SAFE_CAST(src.\`Cuota\` AS NUMERIC) DESC
+      STRING_AGG(contrato, ', ' ORDER BY IFNULL(cuota, 0) DESC) AS codigoAsociado,
+      dni AS numDoc,
+      ANY_VALUE(probabilidad HAVING MAX IFNULL(cuota, 0)) AS probabilidadPago,
+      ANY_VALUE(segmento HAVING MAX IFNULL(cuota, 0)) AS segmento,
+      ANY_VALUE(estrategia HAVING MAX IFNULL(cuota, 0)) AS gestion,
+      ANY_VALUE(frente HAVING MAX IFNULL(cuota, 0)) AS frente,
+      ANY_VALUE(nombre HAVING MAX IFNULL(cuota, 0)) AS nombre,
+      ANY_VALUE(telefono HAVING MAX IFNULL(cuota, 0)) AS telefono,
+      SUM(IFNULL(cuota, 0)) AS monto,
+      ANY_VALUE(fecha_asamblea HAVING MAX IFNULL(cuota, 0)) AS fechaAsamblea,
+      ANY_VALUE(fecha_vencimiento HAVING MAX IFNULL(cuota, 0)) AS fechaVencimiento,
+      ANY_VALUE(mes HAVING MAX IFNULL(cuota, 0)) AS mes,
+      ANY_VALUE(fec_ult_pag_ccap HAVING MAX IFNULL(cuota, 0)) AS fecUltPagCcap,
+      ANY_VALUE(fec_ult_pag_ccap HAVING MAX IFNULL(cuota, 0)) AS fechaUltimoPago
+    FROM contratos_con_fondos
+    GROUP BY dni
+    ORDER BY segmento, monto DESC
   `
 
   const [rows] = await getBigQueryClient().query({ query, params })
