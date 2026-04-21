@@ -8,6 +8,7 @@ import { MetricsCards } from '@/components/contactability/metrics-cards'
 import { RateCards } from '@/components/contactability/rate-cards'
 import { ContactabilityCharts } from '@/components/contactability/contactability-charts'
 import { ErrorsChart, type ErrorItem } from '@/components/contactability/errors-chart'
+import { ExportCsvButton } from '@/components/contactability/export-csv-button'
 
 type ClienteLite = {
   id: string
@@ -178,6 +179,10 @@ export function CampaignDetailView({
 
       {metrics && (
         <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-foreground">Contactabilidad</h2>
+            <ExportCsvButton campaignId={campaign.id} />
+          </div>
           <MetricsCards metrics={metrics} />
           <RateCards metrics={metrics} />
           <ContactabilityCharts metrics={metrics} />
