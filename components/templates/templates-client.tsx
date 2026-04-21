@@ -29,6 +29,7 @@ const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
   REJECTED: 'destructive',
   PAUSED: 'outline',
   DISABLED: 'outline',
+  DELETED_IN_META: 'destructive',
 }
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -37,6 +38,7 @@ const ESTADO_LABEL: Record<string, string> = {
   REJECTED: 'Rechazada',
   PAUSED: 'Pausada',
   DISABLED: 'Deshabilitada',
+  DELETED_IN_META: '⚠️ Eliminada en Meta',
 }
 
 export function TemplatesClient({ initialTemplates }: { initialTemplates: TemplateRow[] }) {
@@ -54,11 +56,18 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
       const response = await fetch('/api/templates/sync', { method: 'POST' })
       const result = await response.json()
       if (!result.success) throw new Error(result.error ?? 'Error en sync')
+      const r = result.resumen
+      const partes = [
+        `${r.creadas} creadas`,
+        `${r.actualizadas} actualizadas`,
+      ]
+      if (r.borradas > 0) partes.push(`${r.borradas} borradas`)
+      if (r.marcadasComoEliminadas > 0)
+        partes.push(`${r.marcadasComoEliminadas} marcadas como eliminadas (con campañas asociadas)`)
+      if (r.errores > 0) partes.push(`${r.errores} errores`)
       setFeedback({
         type: 'success',
-        message: `Sincronizado: ${result.resumen.creadas} creadas, ${result.resumen.actualizadas} actualizadas${
-          result.resumen.errores > 0 ? `, ${result.resumen.errores} errores` : ''
-        }`,
+        message: `Sincronizado: ${partes.join(', ')}`,
       })
       router.refresh()
     } catch (error) {
@@ -137,7 +146,12 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
       ) : (
         <div className="space-y-4">
           {initialTemplates.map((t) => (
-            <Card key={t.id} className="hover:shadow-md transition-shadow">
+            <Card
+              key={t.id}
+              className={`hover:shadow-md transition-shadow ${
+                t.estadoMeta === 'DELETED_IN_META' ? 'opacity-60' : ''
+              }`}
+            >
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-2">

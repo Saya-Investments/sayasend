@@ -6,11 +6,25 @@ import { createMetaTemplate } from '@/lib/meta-template-service'
 export const runtime = 'nodejs'
 
 // ============================================================================
-// GET /api/templates — lista templates desde la BD (usado por /campaigns/new)
+// GET /api/templates — lista templates desde la BD (usado por /campaigns/new).
+// Por default excluye las marcadas como 'DELETED_IN_META' (ya no existen en
+// Meta y no se deberían poder seleccionar para nuevas campañas). Para traer
+// todas (para la página /templates que las muestra grayed out), pasa
+// ?includeDeleted=true.
 // ============================================================================
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const templates = await prisma.template.findMany({ orderBy: { nombre: 'asc' } })
+    const includeDeleted =
+      new URL(request.url).searchParams.get('includeDeleted') === 'true'
+
+    const where = includeDeleted
+      ? {}
+      : { NOT: { estadoMeta: 'DELETED_IN_META' } }
+
+    const templates = await prisma.template.findMany({
+      where,
+      orderBy: { nombre: 'asc' },
+    })
     return NextResponse.json({ success: true, data: templates })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
