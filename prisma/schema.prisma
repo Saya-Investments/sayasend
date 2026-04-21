@@ -33,21 +33,23 @@ model Cliente {
 }
 
 model Template {
-  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nombre        String     @unique(map: "uq_templates_nombre") @db.VarChar(120)
-  descripcion   String?
-  contenido     String
-  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt     DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  metaId        String?    @map("meta_id") @db.VarChar(100)
-  estadoMeta    String?    @map("estado_meta") @db.VarChar(20)
-  categoria     String?    @db.VarChar(30)
-  idioma        String?    @db.VarChar(10)
-  header        String?
-  footer        String?
-  botones       Json?
-  birdProjectId String?    @map("bird_project_id") @db.VarChar(100)
-  campaigns     Campaign[]
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre           String     @unique(map: "uq_templates_nombre") @db.VarChar(120)
+  descripcion      String?
+  contenido        String
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  metaId           String?    @map("meta_id") @db.VarChar(100)
+  estadoMeta       String?    @map("estado_meta") @db.VarChar(20)
+  categoria        String?    @db.VarChar(30)
+  idioma           String?    @db.VarChar(10)
+  header           String?
+  footer           String?
+  botones          Json?
+  birdProjectId    String?    @map("bird_project_id") @db.VarChar(100)
+  header_type      String?    @db.VarChar(20)
+  header_media_url String?
+  campaigns        Campaign[]
 
   @@index([estadoMeta], map: "idx_templates_estado_meta")
   @@map("templates")
