@@ -63,10 +63,24 @@ export async function POST(request: NextRequest) {
     const templateId = normalizeTemplateId(body.templateId)
     if (!templateId) {
       return NextResponse.json(
-        { success: false, error: 'templateId is required and must be a valid UUID' },
+        { success: false, error: 'templateId is required (must be a valid UUID)' },
         { status: 400 },
       )
     }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const campaignData: Prisma.CampaignUncheckedCreateInput = {
+        nombre: body.name.trim(),
+        templateId,
+        databaseName: body.databaseName.trim(),
+        sendMode: (body as { sendMode?: string }).sendMode ?? 'M0',
+        segmentoFilter: body.segmentFilters.segmento || null,
+        estrategiaFilter: body.segmentFilters.estrategia || null,
+        frenteFilter: body.segmentFilters.frente || null,
+        variableMappings: body.variableMappings ?? {},
+        totalContacts: body.contacts.length,
+        status: 'draft',
+      }
 
     const buildClienteData = (contact: CampaignContact) => ({
       codigoAsociado: contact.codigoAsociado,

@@ -244,10 +244,13 @@ export function CampaignForm() {
     setIsLoadingContacts(false)
   }
 
-  const handleVariableMappingChange = (placeholder: string, columnName: string) => {
+  // El key en variableMappings es el índice numérico ("1", "2", ...) — formato
+  // canónico que el motor espera. No usamos el placeholder con llaves ({{1}})
+  // porque rompe los parseInt() de sort que hace el motor.
+  const handleVariableMappingChange = (index: string, columnName: string) => {
     setVariableMappings((previousMappings) => ({
       ...previousMappings,
-      [placeholder]: columnName,
+      [index]: columnName,
     }))
   }
 
@@ -258,7 +261,7 @@ export function CampaignForm() {
     const firstContact = filteredContacts[0]
 
     currentVariables.forEach((variable) => {
-      const mappedColumn = variableMappings[variable.placeholder]
+      const mappedColumn = variableMappings[variable.index]
 
       if (mappedColumn) {
         const value = firstContact[mappedColumn] || 'N/A'
@@ -639,9 +642,9 @@ export function CampaignForm() {
                             Variable {variable.placeholder}
                           </Label>
                           <Select
-                            value={variableMappings[variable.placeholder] || ''}
+                            value={variableMappings[variable.index] || ''}
                             onValueChange={(value) =>
-                              handleVariableMappingChange(variable.placeholder, value)
+                              handleVariableMappingChange(variable.index, value)
                             }
                           >
                             <SelectTrigger id={`var-${variable.index}`} className="w-full">
