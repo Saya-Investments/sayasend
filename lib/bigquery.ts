@@ -1,10 +1,13 @@
 import { BigQuery } from '@google-cloud/bigquery'
 
 import type { BigQueryColumn, BigQueryContactsPayload } from '@/lib/types'
+import retencionRetadorPhones from '@/lib/retencion-retador-phones.json'
 
 const BIGQUERY_PROJECT_ID = 'peak-emitter-350713'
 const BIGQUERY_DATASET_ID = 'CDV_COL'
 const TABLE_NAME_PATTERN = /^[A-Za-z0-9_]+$/
+
+const RETENCION_RETADOR_PHONES: Record<string, string> = retencionRetadorPhones
 
 type BigQueryCredentialShape = {
   project_id?: string
@@ -231,7 +234,7 @@ export async function queryBigQueryContacts(
       CAST(src.\`estrategia\` AS STRING) AS gestion,
       CAST(src.\`Frente\` AS STRING) AS frente,
       CAST(fondos.\`Nombres\` AS STRING) AS nombre,
-      CAST(fondos.\`Telf_SMS\` AS STRING) AS telefono,
+      CAST(fondos.\`Telefono_2\` AS STRING) AS telefono,
       SAFE_CAST(src.\`Cuota\` AS NUMERIC) AS monto,
       ciclo.fecha_inicio_ciclo AS fechaAsamblea,
       ciclo.fecha_fin_ciclo AS fechaVencimiento,
@@ -258,22 +261,34 @@ export async function queryBigQueryContacts(
   const [rows] = await getBigQueryClient().query({ query, params })
   const serializedRows = rows.map((row) => serializeBigQueryValue(row) as Record<string, unknown>)
 
-  const contacts = serializedRows.map((row) => ({
-    codigoAsociado: toStringValue(row.codigoAsociado),
-    numDoc: toStringValue(row.numDoc),
-    probabilidadPago: toNumber(row.probabilidadPago),
-    segmento: toStringValue(row.segmento),
-    gestion: toStringValue(row.gestion),
-    frente: toNullableString(row.frente),
-    nombre: toStringValue(row.nombre),
-    telefono: toStringValue(row.telefono),
-    monto: toNumber(row.monto),
-    fechaAsamblea: toNullableString(row.fechaAsamblea),
-    fechaVencimiento: toNullableString(row.fechaVencimiento),
-    mes: toNullableString(row.mes) ?? '',
-    fecUltPagCcap: toNullableString(row.fecUltPagCcap),
-    fechaUltimoPago: toNullableString(row.fechaUltimoPago),
-  }))
+  const contacts = serializedRows.map((row) => {
+    const numDoc = toStringValue(row.numDoc)
+    let telefono = toStringValue(row.telefono)
+
+    if (!telefono && numDoc) {
+      const fallback = RETENCION_RETADOR_PHONES[numDoc]
+      if (fallback) {
+        telefono = fallback
+      }
+    }
+
+    return {
+      codigoAsociado: toStringValue(row.codigoAsociado),
+      numDoc,
+      probabilidadPago: toNumber(row.probabilidadPago),
+      segmento: toStringValue(row.segmento),
+      gestion: toStringValue(row.gestion),
+      frente: toNullableString(row.frente),
+      nombre: toStringValue(row.nombre),
+      telefono,
+      monto: toNumber(row.monto),
+      fechaAsamblea: toNullableString(row.fechaAsamblea),
+      fechaVencimiento: toNullableString(row.fechaVencimiento),
+      mes: toNullableString(row.mes) ?? '',
+      fecUltPagCcap: toNullableString(row.fecUltPagCcap),
+      fechaUltimoPago: toNullableString(row.fechaUltimoPago),
+    }
+  })
 
   const columns: BigQueryColumn[] = [
     { name: 'codigoAsociado', type: 'STRING' },
