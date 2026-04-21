@@ -28,7 +28,7 @@ type MetricsRow = {
 export default async function CampaignDetailPage({ params }: CampaignDetailPageProps) {
   const { id } = await params
 
-  const campaign = await prisma.campaign.findUnique({
+  const rawCampaign = await prisma.campaign.findUnique({
     where: { id },
     include: {
       template: true,
@@ -38,6 +38,21 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
       },
     },
   })
+
+  const campaign = rawCampaign
+    ? {
+        ...rawCampaign,
+        campaignContacts: rawCampaign.campaignContacts.map((cc) => ({
+          ...cc,
+          cliente: {
+            ...cc.cliente,
+            monto: Number(cc.cliente.monto),
+            probabilidad:
+              cc.cliente.probabilidad === null ? null : Number(cc.cliente.probabilidad),
+          },
+        })),
+      }
+    : null
 
   if (!campaign) {
     return (

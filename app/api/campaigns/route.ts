@@ -60,79 +60,107 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const campaignData: Prisma.CampaignUncheckedCreateInput = {
-        nombre: body.name.trim(),
-        templateId: normalizeTemplateId(body.templateId) ?? undefined,
-        databaseName: body.databaseName.trim(),
-        segmentoFilter: body.segmentFilters.segmento || null,
-        estrategiaFilter: body.segmentFilters.estrategia || null,
-        frenteFilter: body.segmentFilters.frente || null,
-        variableMappings: body.variableMappings ?? {},
-        totalContacts: body.contacts.length,
-        status: 'draft',
-      }
+    const templateId = normalizeTemplateId(body.templateId)
+    if (!templateId) {
+      return NextResponse.json(
+        { success: false, error: 'templateId is required and must be a valid UUID' },
+        { status: 400 },
+      )
+    }
 
-      const campaign = await tx.campaign.create({
-        data: campaignData,
-      })
+    const buildClienteData = (contact: CampaignContact) => ({
+      codigoAsociado: contact.codigoAsociado,
+      dni: contact.numDoc,
+      telefono: contact.telefono || '',
+      nombre: contact.nombre || '',
+      monto: toDecimal(contact.monto),
+      probabilidad:
+        contact.probabilidadPago === null || contact.probabilidadPago === undefined
+          ? null
+          : toDecimal(contact.probabilidadPago),
+      segmento: contact.segmento || null,
+      estrategia: contact.gestion || null,
+      frente: contact.frente || null,
+      fechaAsamblea: toNullableDate(contact.fechaAsamblea),
+      fechaVencimiento: toNullableDate(contact.fechaVencimiento),
+      fecUltPagCcap: toNullableDate(contact.fecUltPagCcap),
+      mes: contact.mes || null,
+    })
 
-      for (const contact of body.contacts) {
-        const existingCliente = await tx.cliente.findFirst({
-          where: {
-            OR: [
-              { codigoAsociado: contact.codigoAsociado },
-              { dni: contact.numDoc },
-            ],
+    const dnis = body.contacts.map((c) => c.numDoc).filter(Boolean)
+    const codigos = body.contacts.map((c) => c.codigoAsociado).filter(Boolean)
+
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const campaign = await tx.campaign.create({
+          data: {
+            nombre: body.name.trim(),
+            templateId,
+            databaseName: body.databaseName.trim(),
+            sendMode: 'M0',
+            segmentoFilter: body.segmentFilters.segmento || null,
+            estrategiaFilter: body.segmentFilters.estrategia || null,
+            frenteFilter: body.segmentFilters.frente || null,
+            variableMappings: body.variableMappings ?? {},
+            totalContacts: body.contacts.length,
+            status: 'draft',
           },
         })
 
-        const clienteData = {
-          codigoAsociado: contact.codigoAsociado,
-          dni: contact.numDoc,
-          telefono: contact.telefono || '',
-          nombre: contact.nombre || '',
-          monto: toDecimal(contact.monto),
-          probabilidad:
-            contact.probabilidadPago === null || contact.probabilidadPago === undefined
-              ? null
-              : toDecimal(contact.probabilidadPago),
-          segmento: contact.segmento || null,
-          estrategia: contact.gestion || null,
-          frente: contact.frente || null,
-          fechaAsamblea: toNullableDate(contact.fechaAsamblea),
-          fechaVencimiento: toNullableDate(contact.fechaVencimiento),
-          fecUltPagCcap: toNullableDate(contact.fecUltPagCcap),
-          mes: contact.mes || null,
+        const existingClientes = await tx.cliente.findMany({
+          where: {
+            OR: [{ dni: { in: dnis } }, { codigoAsociado: { in: codigos } }],
+          },
+          select: { id: true, dni: true, codigoAsociado: true },
+        })
+
+        const byDni = new Map(existingClientes.map((c) => [c.dni, c.id]))
+        const byCodigo = new Map(existingClientes.map((c) => [c.codigoAsociado, c.id]))
+
+        const toCreate: ReturnType<typeof buildClienteData>[] = []
+        const toUpdate: Array<{ id: string; data: ReturnType<typeof buildClienteData> }> = []
+        const existingClienteIds: string[] = []
+
+        for (const contact of body.contacts) {
+          const data = buildClienteData(contact)
+          const existingId = byDni.get(contact.numDoc) ?? byCodigo.get(contact.codigoAsociado)
+          if (existingId) {
+            toUpdate.push({ id: existingId, data })
+            existingClienteIds.push(existingId)
+          } else {
+            toCreate.push(data)
+          }
         }
 
-        const cliente = existingCliente
-          ? await tx.cliente.update({
-              where: { id: existingCliente.id },
-              data: clienteData,
-            })
-          : await tx.cliente.create({
-              data: clienteData,
-            })
+        await Promise.all(
+          toUpdate.map(({ id, data }) => tx.cliente.update({ where: { id }, data })),
+        )
 
-        await tx.campaignContact.upsert({
-          where: {
-            campaignId_clienteId: {
+        let createdClienteIds: string[] = []
+        if (toCreate.length > 0) {
+          const created = await tx.cliente.createManyAndReturn({
+            data: toCreate,
+            select: { id: true },
+          })
+          createdClienteIds = created.map((c) => c.id)
+        }
+
+        const allClienteIds = [...existingClienteIds, ...createdClienteIds]
+        if (allClienteIds.length > 0) {
+          await tx.campaignContact.createMany({
+            data: allClienteIds.map((clienteId) => ({
               campaignId: campaign.id,
-              clienteId: cliente.id,
-            },
-          },
-          update: {},
-          create: {
-            campaignId: campaign.id,
-            clienteId: cliente.id,
-            sendStatus: 'pending',
-          },
-        })
-      }
+              clienteId,
+              sendStatus: 'pending',
+            })),
+            skipDuplicates: true,
+          })
+        }
 
-      return campaign
-    })
+        return campaign
+      },
+      { timeout: 60000, maxWait: 15000 },
+    )
 
     return NextResponse.json({
       success: true,
