@@ -47,8 +47,8 @@ model Template {
   footer           String?
   botones          Json?
   birdProjectId    String?    @map("bird_project_id") @db.VarChar(100)
-  header_type      String?    @db.VarChar(20)
-  header_media_url String?
+  headerType       String?    @map("header_type") @db.VarChar(20)
+  headerMediaUrl   String?    @map("header_media_url")
   campaigns        Campaign[]
 
   @@index([estadoMeta], map: "idx_templates_estado_meta")
