@@ -134,6 +134,61 @@ function toNumber(value: unknown) {
   return 0
 }
 
+const SPANISH_MONTHS = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+]
+
+const COMBINING_DIACRITICS = new RegExp('[\\u0300-\\u036f]', 'g')
+
+function stripAccents(value: string): string {
+  return value.normalize('NFD').replace(COMBINING_DIACRITICS, '')
+}
+
+function matchOriginalCase(original: string, replacement: string): string {
+  if (original === original.toUpperCase()) return replacement.toUpperCase()
+  if (original[0] === original[0].toUpperCase()) {
+    return replacement[0].toUpperCase() + replacement.slice(1)
+  }
+  return replacement
+}
+
+// El valor de `mes` que devuelve BigQuery corresponde al mes de corte actual,
+// pero la campaña se envía pensando en el ciclo siguiente, así que mostramos
+// y guardamos el mes posterior.
+function addOneMonthToMes(value: string): string {
+  if (!value) return value
+
+  const trimmed = value.trim()
+  if (!trimmed) return value
+
+  const yearMonthMatch = trimmed.match(/^(\d{4})(\d{2})$/)
+  if (yearMonthMatch) {
+    const [, yearText, monthText] = yearMonthMatch
+    const date = new Date(Number(yearText), Number(monthText) - 1, 1)
+    date.setMonth(date.getMonth() + 1)
+    return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`
+  }
+
+  const normalized = stripAccents(trimmed.toLowerCase())
+  const index = SPANISH_MONTHS.indexOf(normalized)
+  if (index !== -1) {
+    return matchOriginalCase(trimmed, SPANISH_MONTHS[(index + 1) % 12])
+  }
+
+  return value
+}
+
 export async function listBigQueryTables(): Promise<BigQueryTableInfo[]> {
   const dataset = getBigQueryClient().dataset(BIGQUERY_DATASET_ID)
   const [tables] = await dataset.getTables()
@@ -315,7 +370,7 @@ export async function queryBigQueryContacts(
       monto: toNumber(row.monto),
       fechaAsamblea: toNullableString(row.fechaAsamblea),
       fechaVencimiento: toNullableString(row.fechaVencimiento),
-      mes: toNullableString(row.mes) ?? '',
+      mes: addOneMonthToMes(toNullableString(row.mes) ?? ''),
       fecUltPagCcap: toNullableString(row.fecUltPagCcap),
       fechaUltimoPago: toNullableString(row.fechaUltimoPago),
     }
