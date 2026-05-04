@@ -10,6 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { getWhatsAppErrorDescription } from '@/lib/whatsapp-error-codes'
 
 export type ErrorItem = { code: string; count: number }
 
@@ -46,11 +47,30 @@ export function ErrorsChart({ errors }: ErrorsChartProps) {
             <YAxis type="category" dataKey="code" width={80} />
             <Tooltip
               formatter={(value: number) => [value, 'Ocurrencias']}
-              labelFormatter={(label) => `Código ${label}`}
+              labelFormatter={(label) => `Código ${label} — ${getWhatsAppErrorDescription(label)}`}
             />
             <Bar dataKey="count" fill="#E74C3C" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
+
+        <div className="mt-4 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Significado de los códigos
+          </p>
+          <ul className="space-y-1.5">
+            {errors.map((e) => (
+              <li key={e.code} className="text-sm flex gap-2">
+                <span className="font-mono font-semibold text-foreground shrink-0 min-w-[60px]">
+                  {e.code}
+                </span>
+                <span className="text-muted-foreground">
+                  {getWhatsAppErrorDescription(e.code)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         <p className="text-xs text-muted-foreground mt-4 italic">
           Los códigos de error más frecuentes pueden indicar problemas sistemáticos
         </p>
