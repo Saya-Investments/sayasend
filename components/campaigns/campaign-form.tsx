@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   createCampaign,
@@ -9,10 +9,12 @@ import {
   getBigQueryEstrategias,
   getBigQueryFrentes,
 } from '@/lib/api'
+import { parseContactsExcel } from '@/lib/excel-contacts'
 import type {
   BigQueryColumn,
   BigQueryContactsPayload,
   BigQueryDatabase,
+  CampaignSource,
   CreateCampaignPayload,
 } from '@/lib/types'
 
@@ -51,6 +53,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const CONTACTS_PAGE_SIZE = 15
 
@@ -73,6 +76,11 @@ function formatDate(value: string | Date | null | undefined) {
 export function CampaignForm() {
   const [campaignName, setCampaignName] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState('')
+  const [source, setSource] = useState<CampaignSource>('bigquery')
+  const [excelFileName, setExcelFileName] = useState('')
+  const [isParsingExcel, setIsParsingExcel] = useState(false)
+  const [excelWarnings, setExcelWarnings] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [databaseName, setDatabaseName] = useState('')
   const [segmento, setSegmento] = useState('')
   const [estrategia, setEstrategia] = useState('')
@@ -208,6 +216,57 @@ export function CampaignForm() {
     setFrente('')
     setEstrategia('')
     setContactsPage(1)
+    setExcelFileName('')
+    setExcelWarnings([])
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleSourceChange = (next: CampaignSource) => {
+    if (next === source) return
+    setSource(next)
+    setDatabaseName('')
+    setSegmento('')
+    setErrorMessage('')
+    resetContactSelection()
+  }
+
+  const handleExcelFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsParsingExcel(true)
+    setErrorMessage('')
+    setSuccessMessage('')
+    setExcelWarnings([])
+
+    const result = await parseContactsExcel(file)
+
+    if (!result.success) {
+      setErrorMessage(result.error)
+      setExcelFileName('')
+      setContactsPayload({ columns: [], contacts: [] })
+      setAvailableColumns([])
+      setShowContacts(false)
+      setIsParsingExcel(false)
+      return
+    }
+
+    const excelColumns: BigQueryColumn[] = [
+      { name: 'numDoc', type: 'STRING' },
+      { name: 'telefono', type: 'STRING' },
+    ]
+
+    setExcelFileName(file.name)
+    setExcelWarnings(result.warnings)
+    setDatabaseName(file.name)
+    setContactsPayload({ columns: excelColumns, contacts: result.contacts })
+    setAvailableColumns(excelColumns)
+    setVariableMappings({})
+    setContactsPage(1)
+    setShowContacts(true)
+    setIsParsingExcel(false)
   }
 
   const handleApplyFilters = async () => {
@@ -278,8 +337,13 @@ export function CampaignForm() {
       return
     }
 
-    if (!databaseName) {
+    if (source === 'bigquery' && !databaseName) {
       setErrorMessage('Selecciona una base de datos.')
+      return
+    }
+
+    if (source === 'excel' && !excelFileName) {
+      setErrorMessage('Sube un archivo Excel con las columnas "Num Doc" y "telefono".')
       return
     }
 
@@ -303,12 +367,16 @@ export function CampaignForm() {
     const payload: CreateCampaignPayload = {
       name: campaignName.trim(),
       templateId: selectedTemplate || null,
-      databaseName,
-      segmentFilters: {
-        segmento: segmento || undefined,
-        estrategia: estrategia || undefined,
-        frente: frente || undefined,
-      },
+      source,
+      databaseName: source === 'excel' ? `EXCEL:${excelFileName}` : databaseName,
+      segmentFilters:
+        source === 'bigquery'
+          ? {
+              segmento: segmento || undefined,
+              estrategia: estrategia || undefined,
+              frente: frente || undefined,
+            }
+          : {},
       variableMappings,
       contacts: filteredContacts,
     }
@@ -327,7 +395,7 @@ export function CampaignForm() {
 
   const canCreateCampaign =
     !!campaignName.trim() &&
-    !!databaseName &&
+    (source === 'bigquery' ? !!databaseName : !!excelFileName) &&
     filteredContacts.length > 0 &&
     (!needsTemplateMappings ||
       Object.keys(variableMappings).length === currentVariables.length)
@@ -339,147 +407,205 @@ export function CampaignForm() {
           <CardTitle>Datos Basicos</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="campaign-name">Nombre de la Campaña</Label>
-              <Input
-                id="campaign-name"
-                placeholder="Ej. Campaña Premium Abril"
-                value={campaignName}
-                onChange={(event) => setCampaignName(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="database">Base de Datos</Label>
-              <Select
-                value={databaseName}
-                onValueChange={(value) => {
-                  setDatabaseName(value)
-                  resetContactSelection()
-                }}
-                disabled={isLoadingDatabases}
-              >
-                <SelectTrigger id="database" className="w-full">
-                  <SelectValue
-                    placeholder={
-                      isLoadingDatabases ? 'Cargando tablas de BigQuery...' : 'Selecciona una tabla'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {databases.map((database) => (
-                    <SelectItem key={database.id} value={database.name}>
-                      {database.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {isLoadingDatabases && (
-                <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Spinner className="size-3" />
-                  Consultando tablas del dataset `CDV_COL`
-                </p>
-              )}
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="campaign-name">Nombre de la Campaña</Label>
+            <Input
+              id="campaign-name"
+              placeholder="Ej. Campaña Premium Abril"
+              value={campaignName}
+              onChange={(event) => setCampaignName(event.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Segmentacion</CardTitle>
-          <CardDescription>Filtra la tabla seleccionada por segmento, estrategia y frente</CardDescription>
+          <CardTitle>Origen de Clientes</CardTitle>
+          <CardDescription>Elige cómo cargar los clientes: desde BigQuery o desde un archivo Excel</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="segmento">Segmento</Label>
-              <Select
-                value={segmento || 'all'}
-                onValueChange={(value) => setSegmento(value === 'all' ? '' : value)}
+          <Tabs value={source} onValueChange={(value) => handleSourceChange(value as CampaignSource)}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="bigquery">BigQuery</TabsTrigger>
+              <TabsTrigger value="excel">Excel</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="bigquery" className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="database">Base de Datos</Label>
+                <Select
+                  value={databaseName}
+                  onValueChange={(value) => {
+                    setDatabaseName(value)
+                    resetContactSelection()
+                  }}
+                  disabled={isLoadingDatabases}
+                >
+                  <SelectTrigger id="database" className="w-full">
+                    <SelectValue
+                      placeholder={
+                        isLoadingDatabases ? 'Cargando tablas de BigQuery...' : 'Selecciona una tabla'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {databases.map((database) => (
+                      <SelectItem key={database.id} value={database.name}>
+                        {database.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {isLoadingDatabases && (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Spinner className="size-3" />
+                    Consultando tablas del dataset `CDV_COL`
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Segmentación</p>
+                <p className="text-xs text-muted-foreground">
+                  Filtra la tabla seleccionada por segmento, estrategia y frente
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="segmento">Segmento</Label>
+                  <Select
+                    value={segmento || 'all'}
+                    onValueChange={(value) => setSegmento(value === 'all' ? '' : value)}
+                  >
+                    <SelectTrigger id="segmento" className="w-full">
+                      <SelectValue placeholder="Selecciona un segmento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="ALTA">ALTA</SelectItem>
+                      <SelectItem value="MEDIA">MEDIA</SelectItem>
+                      <SelectItem value="BAJA">BAJA</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="estrategia">Estrategia</Label>
+                  <Select
+                    value={estrategia || 'all'}
+                    onValueChange={(value) => setEstrategia(value === 'all' ? '' : value)}
+                    disabled={!databaseName || isLoadingEstrategias}
+                  >
+                    <SelectTrigger id="estrategia" className="w-full">
+                      <SelectValue
+                        placeholder={
+                          !databaseName
+                            ? 'Selecciona una tabla primero'
+                            : isLoadingEstrategias
+                              ? 'Cargando estrategias...'
+                              : 'Selecciona una estrategia'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {estrategias.map((estrategiaOption) => (
+                        <SelectItem key={estrategiaOption} value={estrategiaOption}>
+                          {estrategiaOption}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="frente">Frente</Label>
+                  <Select
+                    value={frente || 'all'}
+                    onValueChange={(value) => setFrente(value === 'all' ? '' : value)}
+                    disabled={!databaseName || isLoadingFrentes}
+                  >
+                    <SelectTrigger id="frente" className="w-full">
+                      <SelectValue
+                        placeholder={
+                          !databaseName
+                            ? 'Selecciona una tabla primero'
+                            : isLoadingFrentes
+                              ? 'Cargando frentes...'
+                              : 'Selecciona un frente'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {frentes.map((frenteOption) => (
+                        <SelectItem key={frenteOption} value={frenteOption}>
+                          {frenteOption}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Button
+                onClick={handleApplyFilters}
+                className="w-full"
+                disabled={isLoadingContacts || !databaseName}
               >
-                <SelectTrigger id="segmento" className="w-full">
-                  <SelectValue placeholder="Selecciona un segmento" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="ALTA">ALTA</SelectItem>
-                  <SelectItem value="MEDIA">MEDIA</SelectItem>
-                  <SelectItem value="BAJA">BAJA</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="estrategia">Estrategia</Label>
-              <Select
-                value={estrategia || 'all'}
-                onValueChange={(value) => setEstrategia(value === 'all' ? '' : value)}
-                disabled={!databaseName || isLoadingEstrategias}
-              >
-                <SelectTrigger id="estrategia" className="w-full">
-                  <SelectValue
-                    placeholder={
-                      !databaseName
-                        ? 'Selecciona una tabla primero'
-                        : isLoadingEstrategias
-                          ? 'Cargando estrategias...'
-                          : 'Selecciona una estrategia'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {estrategias.map((estrategiaOption) => (
-                    <SelectItem key={estrategiaOption} value={estrategiaOption}>
-                      {estrategiaOption}
-                    </SelectItem>
+                {isLoadingContacts ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Spinner />
+                    Consultando clientes...
+                  </span>
+                ) : (
+                  'Aplicar Filtros'
+                )}
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="excel" className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="excel-file">Archivo Excel</Label>
+                <Input
+                  id="excel-file"
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleExcelFileChange}
+                  disabled={isParsingExcel}
+                />
+                <p className="text-xs text-muted-foreground">
+                  El archivo debe incluir las columnas <span className="font-mono">Num Doc</span> y{' '}
+                  <span className="font-mono">telefono</span>. Ambos campos se guardarán como texto.
+                </p>
+              </div>
+
+              {isParsingExcel && (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner className="size-3" />
+                  Procesando archivo...
+                </p>
+              )}
+
+              {excelFileName && !isParsingExcel && (
+                <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+                  <p className="font-medium">{excelFileName}</p>
+                  <p className="text-muted-foreground">
+                    {filteredContacts.length} clientes leídos
+                  </p>
+                  {excelWarnings.map((warning, idx) => (
+                    <p key={idx} className="text-xs text-amber-600 mt-1">
+                      {warning}
+                    </p>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="frente">Frente</Label>
-              <Select
-                value={frente || 'all'}
-                onValueChange={(value) => setFrente(value === 'all' ? '' : value)}
-                disabled={!databaseName || isLoadingFrentes}
-              >
-                <SelectTrigger id="frente" className="w-full">
-                  <SelectValue
-                    placeholder={
-                      !databaseName
-                        ? 'Selecciona una tabla primero'
-                        : isLoadingFrentes
-                          ? 'Cargando frentes...'
-                          : 'Selecciona un frente'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {frentes.map((frenteOption) => (
-                    <SelectItem key={frenteOption} value={frenteOption}>
-                      {frenteOption}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
 
           {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
           {successMessage && <p className="text-sm text-green-600">{successMessage}</p>}
-
-          <Button onClick={handleApplyFilters} className="w-full" disabled={isLoadingContacts || !databaseName}>
-            {isLoadingContacts ? (
-              <span className="flex items-center justify-center gap-2">
-                <Spinner />
-                Consultando clientes...
-              </span>
-            ) : (
-              'Aplicar Filtros'
-            )}
-          </Button>
         </CardContent>
       </Card>
 
@@ -490,7 +616,9 @@ export function CampaignForm() {
               <div>
                 <CardTitle>Clientes ({filteredContacts.length})</CardTitle>
                 <CardDescription>
-                  Clientes cruzados desde BigQuery para la tabla {databaseName}
+                  {source === 'excel'
+                    ? `Clientes cargados desde ${excelFileName || 'archivo Excel'}`
+                    : `Clientes cruzados desde BigQuery para la tabla ${databaseName}`}
                 </CardDescription>
               </div>
               {contactsWithoutPhone > 0 && (
@@ -503,7 +631,9 @@ export function CampaignForm() {
           <CardContent>
             {filteredContacts.length === 0 && !isLoadingContacts ? (
               <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                No se encontraron clientes con esos filtros.
+                {source === 'excel'
+                  ? 'El archivo no contiene filas válidas.'
+                  : 'No se encontraron clientes con esos filtros.'}
               </div>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-border">

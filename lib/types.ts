@@ -84,9 +84,12 @@ export interface BigQueryContactsPayload {
   contacts: CampaignContact[]
 }
 
+export type CampaignSource = 'bigquery' | 'excel'
+
 export interface CreateCampaignPayload {
   name: string
   templateId?: string | null
+  source?: CampaignSource
   databaseName: string
   segmentFilters: {
     segmento?: string

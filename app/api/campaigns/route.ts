@@ -43,6 +43,22 @@ function normalizeTemplateId(templateId?: string | null) {
   return isValidUuid(templateId) ? templateId : null
 }
 
+// Castea cualquier valor a string limpio. Para enteros evita la notación
+// científica (que aparece al leer Excel/BigQuery con números grandes).
+function toStringField(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number') {
+    if (Number.isFinite(value) && Number.isInteger(value)) {
+      return value.toFixed(0)
+    }
+    return String(value).trim()
+  }
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (value instanceof Date) return value.toISOString()
+  return String(value).trim()
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CreateCampaignPayload
@@ -77,9 +93,9 @@ export async function POST(request: NextRequest) {
     }
 
     const buildClienteData = (contact: CampaignContact) => ({
-      codigoAsociado: contact.codigoAsociado,
-      dni: contact.numDoc,
-      telefono: contact.telefono || '',
+      codigoAsociado: toStringField(contact.codigoAsociado),
+      dni: toStringField(contact.numDoc),
+      telefono: toStringField(contact.telefono),
       nombre: contact.nombre || '',
       monto: toDecimal(contact.monto),
       probabilidad:
@@ -95,8 +111,8 @@ export async function POST(request: NextRequest) {
       mes: contact.mes || null,
     })
 
-    const dnis = body.contacts.map((c) => c.numDoc).filter(Boolean)
-    const codigos = body.contacts.map((c) => c.codigoAsociado).filter(Boolean)
+    const dnis = body.contacts.map((c) => toStringField(c.numDoc)).filter(Boolean)
+    const codigos = body.contacts.map((c) => toStringField(c.codigoAsociado)).filter(Boolean)
 
     const result = await prisma.$transaction(
       async (tx) => {
@@ -131,7 +147,9 @@ export async function POST(request: NextRequest) {
 
         for (const contact of body.contacts) {
           const data = buildClienteData(contact)
-          const existingId = byDni.get(contact.numDoc) ?? byCodigo.get(contact.codigoAsociado)
+          const existingId =
+            byDni.get(toStringField(contact.numDoc)) ??
+            byCodigo.get(toStringField(contact.codigoAsociado))
           if (existingId) {
             toUpdate.push({ id: existingId, data })
             existingClienteIds.push(existingId)
