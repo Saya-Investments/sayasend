@@ -32,6 +32,16 @@ const TELEFONO_ALIASES = [
   'nro telefónico',
 ]
 
+const CODIGO_ASOCIADO_ALIASES = [
+  'Codigo Asociado',
+  'codigo asociado',
+  'código asociado',
+  'codigoasociado',
+  'codigo_asociado',
+  'cod asociado',
+  'cod. asociado',
+]
+
 function normalizeHeader(value: unknown): string {
   return String(value ?? '')
     .trim()
@@ -92,6 +102,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
     const headerRow = rows[0].map((c) => String(c ?? ''))
     const numDocIdx = findHeaderIndex(headerRow, NUM_DOC_ALIASES)
     const telefonoIdx = findHeaderIndex(headerRow, TELEFONO_ALIASES)
+    const codigoAsociadoIdx = findHeaderIndex(headerRow, CODIGO_ASOCIADO_ALIASES)
 
     if (numDocIdx === -1) {
       return {
@@ -102,7 +113,13 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
     if (telefonoIdx === -1) {
       return {
         success: false,
-        error: 'No se encontró la columna "telefono" en el archivo.',
+        error: 'No se encontró la columna "Nro. Telefonico" en el archivo.',
+      }
+    }
+    if (codigoAsociadoIdx === -1) {
+      return {
+        success: false,
+        error: 'No se encontró la columna "Codigo Asociado" en el archivo.',
       }
     }
 
@@ -120,6 +137,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
 
       const numDoc = castCellToString(row[numDocIdx])
       const telefono = castCellToString(row[telefonoIdx])
+      const codigoAsociado = castCellToString(row[codigoAsociadoIdx])
 
       if (!numDoc) {
         skippedNoDoc++
@@ -127,7 +145,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
       }
 
       contacts.push({
-        codigoAsociado: '',
+        codigoAsociado,
         numDoc,
         telefono,
         nombre: '',
