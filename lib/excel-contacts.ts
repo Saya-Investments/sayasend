@@ -7,6 +7,7 @@ export type ExcelParseResult =
   | { success: false; error: string }
 
 const NUM_DOC_ALIASES = [
+  'Num Doc',
   'num doc',
   'numdoc',
   'num_doc',
@@ -24,16 +25,11 @@ const NUM_DOC_ALIASES = [
 ]
 
 const TELEFONO_ALIASES = [
-  'telefono',
-  'teléfono',
-  'tel',
-  'phone',
-  'celular',
-  'movil',
-  'móvil',
-  'numero telefono',
-  'numero de telefono',
-  'whatsapp',
+  'Nro. Telefonico',
+  'nro. telefonico',
+  'nro telefonico',
+  'nro. telefónico',
+  'nro telefónico',
 ]
 
 function normalizeHeader(value: unknown): string {
