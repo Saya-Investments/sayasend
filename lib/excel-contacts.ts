@@ -127,7 +127,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
       }
 
       contacts.push({
-        codigoAsociado: numDoc,
+        codigoAsociado: '',
         numDoc,
         telefono,
         nombre: '',
