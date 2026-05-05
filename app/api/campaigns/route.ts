@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
 
     const dnis = body.contacts.map((c) => toStringField(c.numDoc)).filter(Boolean)
     const codigos = body.contacts.map((c) => toStringField(c.codigoAsociado)).filter(Boolean)
+    const isExcelSource = body.databaseName.trim().startsWith('EXCEL:')
 
     const result = await prisma.$transaction(
       async (tx) => {
@@ -151,7 +152,9 @@ export async function POST(request: NextRequest) {
             byDni.get(toStringField(contact.numDoc)) ??
             byCodigo.get(toStringField(contact.codigoAsociado))
           if (existingId) {
-            toUpdate.push({ id: existingId, data })
+            if (!isExcelSource) {
+              toUpdate.push({ id: existingId, data })
+            }
             existingClienteIds.push(existingId)
           } else {
             toCreate.push(data)
@@ -185,7 +188,7 @@ export async function POST(request: NextRequest) {
 
         return campaign
       },
-      { timeout: 60000, maxWait: 15000 },
+      { timeout: 180000, maxWait: 15000 },
     )
 
     return NextResponse.json({

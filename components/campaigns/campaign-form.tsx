@@ -167,7 +167,7 @@ export function CampaignForm() {
   }, [])
 
   useEffect(() => {
-    if (!databaseName) {
+    if (source !== 'bigquery' || !databaseName) {
       setFrentes([])
       setFrente('')
       setEstrategias([])
@@ -205,7 +205,7 @@ export function CampaignForm() {
 
     loadFrentes()
     loadEstrategias()
-  }, [databaseName])
+  }, [databaseName, source])
 
   const resetContactSelection = () => {
     setShowContacts(false)
