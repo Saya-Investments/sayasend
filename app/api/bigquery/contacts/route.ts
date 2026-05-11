@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { queryBigQueryContacts, queryBigQueryContactsCobranza } from '@/lib/bigquery'
+import { queryBigQueryContacts } from '@/lib/bigquery'
 
 export const runtime = 'nodejs'
 
@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
   const segmento = request.nextUrl.searchParams.get('segmento')?.trim() ?? ''
   const estrategia = request.nextUrl.searchParams.get('estrategia')?.trim() ?? ''
   const frente = request.nextUrl.searchParams.get('frente')?.trim() ?? ''
-  const gestionType = request.nextUrl.searchParams.get('gestionType')?.trim() ?? 'gestion_m0'
 
   if (!tableName) {
     return NextResponse.json(
@@ -22,15 +21,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const filters = {
+    const result = await queryBigQueryContacts(tableName, {
       segmento: segmento || undefined,
       estrategia: estrategia || undefined,
       frente: frente || undefined,
-    }
-
-    const result = gestionType === 'gestion_cobranza'
-      ? await queryBigQueryContactsCobranza(tableName, filters)
-      : await queryBigQueryContacts(tableName, filters)
+    })
 
     return NextResponse.json({
       success: true,
