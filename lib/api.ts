@@ -155,6 +155,7 @@ export async function getBigQueryContacts(filters: {
   segmento?: string
   estrategia?: string
   frente?: string
+  gestionType?: 'gestion_m0' | 'gestion_cobranza'
 }) {
   const queryParams = new URLSearchParams({
     databaseName: filters.databaseName,
@@ -163,6 +164,7 @@ export async function getBigQueryContacts(filters: {
   if (filters.segmento) queryParams.append('segmento', filters.segmento)
   if (filters.estrategia) queryParams.append('estrategia', filters.estrategia)
   if (filters.frente) queryParams.append('frente', filters.frente)
+  if (filters.gestionType) queryParams.append('gestionType', filters.gestionType)
 
   return internalApiCall(`/api/bigquery/contacts?${queryParams.toString()}`)
 }

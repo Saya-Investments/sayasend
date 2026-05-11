@@ -269,7 +269,7 @@ export function CampaignForm() {
     setIsParsingExcel(false)
   }
 
-  const handleApplyFilters = async () => {
+  const handleApplyFilters = async (gestionType: 'gestion_m0' | 'gestion_cobranza') => {
     if (!databaseName) {
       setErrorMessage('Selecciona una base de datos para consultar clientes.')
       return
@@ -285,6 +285,7 @@ export function CampaignForm() {
       segmento: segmento || undefined,
       estrategia: estrategia || undefined,
       frente: frente || undefined,
+      gestionType,
     })
 
     if (!response.success || !response.data) {
@@ -548,20 +549,34 @@ export function CampaignForm() {
                 </div>
               </div>
 
-              <Button
-                onClick={handleApplyFilters}
-                className="w-full"
-                disabled={isLoadingContacts || !databaseName}
-              >
-                {isLoadingContacts ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Spinner />
-                    Consultando clientes...
-                  </span>
-                ) : (
-                  'Aplicar Filtros'
-                )}
-              </Button>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  onClick={() => handleApplyFilters('gestion_m0')}
+                  disabled={isLoadingContacts || !databaseName}
+                >
+                  {isLoadingContacts ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Spinner />
+                      Consultando...
+                    </span>
+                  ) : (
+                    'Gestión m0'
+                  )}
+                </Button>
+                <Button
+                  onClick={() => handleApplyFilters('gestion_cobranza')}
+                  disabled={isLoadingContacts || !databaseName}
+                >
+                  {isLoadingContacts ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Spinner />
+                      Consultando...
+                    </span>
+                  ) : (
+                    'Gestión cobranza'
+                  )}
+                </Button>
+              </div>
             </TabsContent>
 
             <TabsContent value="excel" className="mt-4 space-y-4">
