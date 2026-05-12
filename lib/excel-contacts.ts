@@ -3,11 +3,10 @@ import * as XLSX from 'xlsx'
 import type { CampaignContact } from '@/lib/types'
 
 export type ExcelParseResult =
-  | { success: true; contacts: CampaignContact[]; warnings: string[] }
+  | { success: true; contacts: CampaignContact[]; warnings: string[]; foundOptionalColumns: string[] }
   | { success: false; error: string }
 
 const NUM_DOC_ALIASES = [
-  'Num Doc',
   'num doc',
   'numdoc',
   'num_doc',
@@ -22,24 +21,95 @@ const NUM_DOC_ALIASES = [
   'doc',
   'cedula',
   'cédula',
+  'num. doc',
+  'nro doc',
+  'nro. doc',
+  'nro documento',
+  'nro. documento',
+  'ruc',
+  'pasaporte',
+  'identificacion',
+  'identificación',
+  'id cliente',
+  'id',
 ]
 
 const TELEFONO_ALIASES = [
-  'Nro. Telefonico',
   'nro. telefonico',
   'nro telefonico',
   'nro. telefónico',
   'nro telefónico',
+  'telefono',
+  'teléfono',
+  'celular',
+  'cel',
+  'movil',
+  'móvil',
+  'numero celular',
+  'número celular',
+  'nro celular',
+  'nro. celular',
+  'numero telefono',
+  'número teléfono',
+  'nro telefono',
+  'nro. telefono',
+  'telefono sms',
+  'teléfono sms',
+  'tel',
+  'tel.',
+  'phone',
+  'mobile',
+  'numero movil',
+  'número móvil',
+  'nro movil',
+  'nro. movil',
+  'contacto',
 ]
 
 const CODIGO_ASOCIADO_ALIASES = [
-  'Codigo Asociado',
   'codigo asociado',
   'código asociado',
   'codigoasociado',
   'codigo_asociado',
   'cod asociado',
   'cod. asociado',
+]
+
+const MONTO_ALIASES = [
+  'monto',
+  'valor',
+  'deuda',
+  'saldo',
+  'saldo deuda',
+  'importe',
+  'amount',
+  'monto deuda',
+  'saldo capital',
+  'capital',
+  'valor deuda',
+  'total deuda',
+  'total',
+]
+
+const FECHA_VENCIMIENTO_ALIASES = [
+  'fecha vencimiento',
+  'fecha de vencimiento',
+  'fec vencimiento',
+  'fec. vencimiento',
+  'vencimiento',
+  'fecha_vencimiento',
+  'fecha venc',
+  'fec venc',
+  'fec. venc',
+  'f. vencimiento',
+  'f vencimiento',
+  'fecha vto',
+  'vto',
+  'fecha limite',
+  'fecha límite',
+  'fecha expiracion',
+  'fecha expiración',
+  'due date',
 ]
 
 function normalizeHeader(value: unknown): string {
@@ -75,10 +145,33 @@ export function castCellToString(value: unknown): string {
   return String(value).trim()
 }
 
+function parseMonto(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'string') {
+    const cleaned = value.trim().replace(/[$€£%\s]/g, '').replace(/,/g, '')
+    const num = parseFloat(cleaned)
+    return Number.isFinite(num) ? num : 0
+  }
+  return 0
+}
+
+function parseFecha(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : value.toISOString().split('T')[0]
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed || null
+  }
+  return null
+}
+
 export async function parseContactsExcel(file: File): Promise<ExcelParseResult> {
   try {
     const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'array' })
+    const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
     const firstSheetName = workbook.SheetNames[0]
     if (!firstSheetName) {
       return { success: false, error: 'El archivo Excel no contiene hojas.' }
@@ -103,6 +196,8 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
     const numDocIdx = findHeaderIndex(headerRow, NUM_DOC_ALIASES)
     const telefonoIdx = findHeaderIndex(headerRow, TELEFONO_ALIASES)
     const codigoAsociadoIdx = findHeaderIndex(headerRow, CODIGO_ASOCIADO_ALIASES)
+    const montoIdx = findHeaderIndex(headerRow, MONTO_ALIASES)
+    const fechaVencimientoIdx = findHeaderIndex(headerRow, FECHA_VENCIMIENTO_ALIASES)
 
     if (numDocIdx === -1) {
       return {
@@ -122,6 +217,10 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
         error: 'No se encontró la columna "Codigo Asociado" en el archivo.',
       }
     }
+
+    const foundOptionalColumns: string[] = []
+    if (montoIdx !== -1) foundOptionalColumns.push('monto')
+    if (fechaVencimientoIdx !== -1) foundOptionalColumns.push('fechaVencimiento')
 
     const contacts: CampaignContact[] = []
     const warnings: string[] = []
@@ -150,8 +249,9 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
         telefono,
         nombre: '',
         segmento: '',
-        monto: 0,
+        monto: montoIdx !== -1 ? parseMonto(row[montoIdx]) : 0,
         fechaUltimoPago: null,
+        fechaVencimiento: fechaVencimientoIdx !== -1 ? parseFecha(row[fechaVencimientoIdx]) : null,
       })
     }
 
@@ -166,7 +266,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
       warnings.push(`Se omitieron ${skippedNoDoc} filas sin "Num Doc".`)
     }
 
-    return { success: true, contacts, warnings }
+    return { success: true, contacts, warnings, foundOptionalColumns }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error desconocido al leer el archivo.'
     return { success: false, error: `No se pudo procesar el archivo: ${message}` }

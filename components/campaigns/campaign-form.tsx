@@ -253,9 +253,12 @@ export function CampaignForm() {
       return
     }
 
+    const foundOptionalColumns = result.foundOptionalColumns ?? []
     const excelColumns: BigQueryColumn[] = [
       { name: 'numDoc', type: 'STRING' },
       { name: 'telefono', type: 'STRING' },
+      ...(foundOptionalColumns.includes('monto') ? [{ name: 'monto', type: 'FLOAT' }] : []),
+      ...(foundOptionalColumns.includes('fechaVencimiento') ? [{ name: 'fechaVencimiento', type: 'DATE' }] : []),
     ]
 
     setExcelFileName(file.name)
@@ -591,8 +594,10 @@ export function CampaignForm() {
                   disabled={isParsingExcel}
                 />
                 <p className="text-xs text-muted-foreground">
-                  El archivo debe incluir las columnas <span className="font-mono">Num Doc</span> y{' '}
-                  <span className="font-mono">telefono</span>. Ambos campos se guardarán como texto.
+                  Columnas obligatorias: <span className="font-mono">Num Doc</span> (o DNI, Cédula…) y{' '}
+                  <span className="font-mono">Telefono</span> (o Celular, Movil…).{' '}
+                  Columnas opcionales: <span className="font-mono">Monto</span> y{' '}
+                  <span className="font-mono">Fecha Vencimiento</span> — si están presentes se guardarán en la BD.
                 </p>
               </div>
 
