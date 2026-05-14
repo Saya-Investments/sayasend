@@ -35,6 +35,7 @@ type CampaignDetail = {
   status: string
   databaseName: string
   sendMode: string | null
+  scheduledAt: Date | string | null
   segmentoFilter: string | null
   estrategiaFilter: string | null
   template: { nombre: string; contenido: string } | null
@@ -87,7 +88,11 @@ export function CampaignDetailView({
   return (
     <div className="space-y-8">
       <div className="flex justify-end">
-        <SendCampaignButton campaignId={campaign.id} currentStatus={campaign.status} />
+        <SendCampaignButton
+          campaignId={campaign.id}
+          currentStatus={campaign.status}
+          scheduledAt={campaign.scheduledAt}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -101,6 +106,14 @@ export function CampaignDetailView({
             <Field label="Modo de Envío" value={campaign.sendMode ?? '—'} />
             <Field label="Segmento" value={campaign.segmentoFilter ?? 'Todos'} />
             <Field label="Estrategia" value={campaign.estrategiaFilter ?? 'Todas'} />
+            <Field
+              label="Programada para"
+              value={
+                campaign.scheduledAt
+                  ? new Date(campaign.scheduledAt).toLocaleString()
+                  : 'No programada'
+              }
+            />
             <div>
               <p className="text-sm text-muted-foreground">Estado</p>
               <Badge className="mt-1">{STATUS_LABEL[campaign.status] ?? campaign.status}</Badge>

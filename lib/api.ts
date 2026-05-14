@@ -101,6 +101,19 @@ export async function sendCampaign(campaignId: string) {
   })
 }
 
+export async function scheduleCampaign(campaignId: string, scheduledAt: string) {
+  return internalApiCall(`/api/campaigns/${campaignId}/schedule`, {
+    method: 'POST',
+    body: JSON.stringify({ scheduledAt }),
+  })
+}
+
+export async function cancelScheduledCampaign(campaignId: string) {
+  return internalApiCall(`/api/campaigns/${campaignId}/schedule`, {
+    method: 'DELETE',
+  })
+}
+
 /**
  * Fetch templates from Cloud Run
  */
