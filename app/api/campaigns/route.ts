@@ -98,6 +98,9 @@ export async function POST(request: NextRequest) {
       telefono: toStringField(contact.telefono),
       nombre: contact.nombre || '',
       monto: toDecimal(contact.monto),
+      monto1: contact.monto1 != null ? toDecimal(contact.monto1 as number) : null,
+      monto2: contact.monto2 != null ? toDecimal(contact.monto2 as number) : null,
+      monto3: contact.monto3 != null ? toDecimal(contact.monto3 as number) : null,
       probabilidad:
         contact.probabilidadPago === null || contact.probabilidadPago === undefined
           ? null
@@ -109,6 +112,8 @@ export async function POST(request: NextRequest) {
       fechaVencimiento: toNullableDate(contact.fechaVencimiento),
       fecUltPagCcap: toNullableDate(contact.fecUltPagCcap),
       mes: contact.mes || null,
+      mesPasado: (contact.mesPasado as string | null | undefined) || null,
+      fechaVencimientoPasado: toNullableDate(contact.fechaVencimientoPasado as string | null | undefined),
     })
 
     const dnis = body.contacts.map((c) => toStringField(c.numDoc)).filter(Boolean)

@@ -98,6 +98,7 @@ export function CampaignForm() {
     contacts: [],
   })
   const [contactsPage, setContactsPage] = useState(1)
+  const [activeGestionType, setActiveGestionType] = useState<'gestion_m0' | 'gestion_cobranza' | null>(null)
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(true)
   const [isLoadingContacts, setIsLoadingContacts] = useState(false)
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false)
@@ -280,6 +281,7 @@ export function CampaignForm() {
 
     setIsLoadingContacts(true)
     setShowContacts(true)
+    setActiveGestionType(gestionType)
     setErrorMessage('')
     setSuccessMessage('')
 
@@ -668,6 +670,15 @@ export function CampaignForm() {
                       <TableHead>Nombre</TableHead>
                       <TableHead>Telefono</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
+                      {activeGestionType === 'gestion_cobranza' && (
+                        <>
+                          <TableHead className="text-right">Monto 1</TableHead>
+                          <TableHead className="text-right">Monto 2</TableHead>
+                          <TableHead className="text-right">Monto 3</TableHead>
+                          <TableHead>Mes Pasado</TableHead>
+                          <TableHead>Fec. Venc. Pasado</TableHead>
+                        </>
+                      )}
                       <TableHead>Fecha Asamblea</TableHead>
                       <TableHead>Fecha Vencimiento</TableHead>
                       <TableHead>Mes</TableHead>
@@ -696,6 +707,33 @@ export function CampaignForm() {
                             maximumFractionDigits: 0,
                           })}
                         </TableCell>
+                        {activeGestionType === 'gestion_cobranza' && (
+                          <>
+                            <TableCell className="text-right">
+                              {Number(contact.monto1 || 0).toLocaleString('es-CO', {
+                                style: 'currency',
+                                currency: 'COP',
+                                maximumFractionDigits: 0,
+                              })}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {Number(contact.monto2 || 0).toLocaleString('es-CO', {
+                                style: 'currency',
+                                currency: 'COP',
+                                maximumFractionDigits: 0,
+                              })}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {Number(contact.monto3 || 0).toLocaleString('es-CO', {
+                                style: 'currency',
+                                currency: 'COP',
+                                maximumFractionDigits: 0,
+                              })}
+                            </TableCell>
+                            <TableCell>{contact.mesPasado || '-'}</TableCell>
+                            <TableCell>{formatDate(contact.fechaVencimientoPasado)}</TableCell>
+                          </>
+                        )}
                         <TableCell>{formatDate(contact.fechaAsamblea)}</TableCell>
                         <TableCell>{formatDate(contact.fechaVencimiento)}</TableCell>
                         <TableCell>{contact.mes || '-'}</TableCell>

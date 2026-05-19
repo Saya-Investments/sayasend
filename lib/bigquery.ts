@@ -288,6 +288,24 @@ export async function queryBigQueryContactsCobranza(
       WHERE fecha_inicio_ciclo > (SELECT fecha_fin_ciclo FROM ciclo_activo)
       QUALIFY ROW_NUMBER() OVER (ORDER BY fecha_inicio_ciclo ASC) = 1
     ),
+    ciclo_anterior AS (
+      SELECT
+        SPLIT(mes_corte_label, ' ')[SAFE_OFFSET(0)] AS mes_pasado,
+        fecha_fin_ciclo AS fecha_vencimiento_pasado
+      FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.ciclos_pago\`
+      WHERE fecha_fin_ciclo < (SELECT fecha_inicio_ciclo FROM ciclo_activo)
+      QUALIFY ROW_NUMBER() OVER (ORDER BY fecha_fin_ciclo DESC) = 1
+    ),
+    fondos_dedup AS (
+      SELECT *
+      FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.DB_BDfondos_actual\`
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY CAST(\`Codigo_Asociado\` AS STRING) ORDER BY 1) = 1
+    ),
+    snap_dedup AS (
+      SELECT *
+      FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.BDfondos_snapshots\`
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY CAST(\`Codigo_Asociado\` AS STRING) ORDER BY 1) = 1
+    ),
     contratos_pendientes AS (
       SELECT
         CAST(src.\`Contrato\` AS STRING) AS contrato,
@@ -299,11 +317,15 @@ export async function queryBigQueryContactsCobranza(
         sig.fecha_inicio_siguiente AS fecha_asamblea,
         ciclo.fecha_fin_ciclo AS fecha_vencimiento,
         CAST(src.\`mes\` AS STRING) AS mes,
-        src.\`Fec_Ult_Pag_CCAP\` AS fec_ult_pag_ccap
+        src.\`Fec_Ult_Pag_CCAP\` AS fec_ult_pag_ccap,
+        SAFE_CAST(src.\`Mora\` AS NUMERIC) AS mora,
+        ant.mes_pasado,
+        ant.fecha_vencimiento_pasado
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\` src
       JOIN ciclo_activo ciclo
         ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
       CROSS JOIN ciclo_siguiente sig
+      CROSS JOIN ciclo_anterior ant
       WHERE (
           src.\`Fec_Ult_Pag_CCAP\` IS NULL
           OR src.\`Fec_Ult_Pag_CCAP\` < ciclo.fecha_inicio_ciclo
@@ -320,29 +342,33 @@ export async function queryBigQueryContactsCobranza(
         CAST(fondos.\`Nombres\` AS STRING) AS nombre,
         CAST(fondos.\`Telefono_2\` AS STRING) AS telefono,
         SAFE_CAST(snap.\`C_Adm\` AS NUMERIC) AS c_adm,
-        SAFE_CAST(snap.\`C_Cap\` AS NUMERIC) AS c_cap,
-        SAFE_CAST(snap.\`Mora\` AS NUMERIC) AS mora
+        SAFE_CAST(snap.\`C_Cap\` AS NUMERIC) AS c_cap
       FROM contratos_pendientes c
-      LEFT JOIN \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.DB_BDfondos_actual\` fondos
+      LEFT JOIN fondos_dedup fondos
         ON c.contrato = CAST(fondos.\`Codigo_Asociado\` AS STRING)
-      LEFT JOIN \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.BDfondos_snapshots\` snap
+      LEFT JOIN snap_dedup snap
         ON c.contrato = CAST(snap.\`Codigo_Asociado\` AS STRING)
     )
     SELECT
-      STRING_AGG(contrato, ', ' ORDER BY IFNULL((c_adm + c_cap) * (mora + 1), 0) DESC) AS codigoAsociado,
+      STRING_AGG(DISTINCT contrato ORDER BY contrato) AS codigoAsociado,
       dni AS numDoc,
-      ANY_VALUE(probabilidad HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS probabilidadPago,
-      ANY_VALUE(segmento HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS segmento,
-      ANY_VALUE(estrategia HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS gestion,
-      ANY_VALUE(frente HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS frente,
-      ANY_VALUE(nombre HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS nombre,
-      ANY_VALUE(telefono HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS telefono,
-      MAX(IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS monto,
-      ANY_VALUE(fecha_asamblea HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS fechaAsamblea,
-      ANY_VALUE(fecha_vencimiento HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS fechaVencimiento,
-      ANY_VALUE(mes HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS mes,
-      ANY_VALUE(fec_ult_pag_ccap HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS fecUltPagCcap,
-      ANY_VALUE(fec_ult_pag_ccap HAVING MAX IFNULL((c_adm + c_cap) * (mora + 1), 0)) AS fechaUltimoPago
+      ANY_VALUE(probabilidad) AS probabilidadPago,
+      ANY_VALUE(segmento) AS segmento,
+      ANY_VALUE(estrategia) AS gestion,
+      ANY_VALUE(frente) AS frente,
+      ANY_VALUE(nombre) AS nombre,
+      ANY_VALUE(telefono) AS telefono,
+      SUM(IFNULL(c_adm + c_cap, 0)) AS monto,
+      SUM(IFNULL(2 * (c_adm + c_cap), 0)) AS monto_1,
+      SUM(IFNULL(3 * (c_adm + c_cap), 0)) AS monto_2,
+      SUM(IFNULL(4 * (c_adm + c_cap), 0)) AS monto_3,
+      ANY_VALUE(fecha_asamblea) AS fechaAsamblea,
+      ANY_VALUE(fecha_vencimiento) AS fechaVencimiento,
+      ANY_VALUE(mes) AS mes,
+      ANY_VALUE(fec_ult_pag_ccap) AS fecUltPagCcap,
+      ANY_VALUE(fec_ult_pag_ccap) AS fechaUltimoPago,
+      ANY_VALUE(mes_pasado) AS mesPasado,
+      ANY_VALUE(fecha_vencimiento_pasado) AS fechaVencimientoPasado
     FROM contratos_con_fondos
     GROUP BY dni
     ORDER BY segmento, monto DESC
@@ -372,11 +398,16 @@ export async function queryBigQueryContactsCobranza(
       nombre: toStringValue(row.nombre),
       telefono,
       monto: toNumber(row.monto),
+      monto1: toNumber(row.monto_1),
+      monto2: toNumber(row.monto_2),
+      monto3: toNumber(row.monto_3),
       fechaAsamblea: toNullableString(row.fechaAsamblea),
       fechaVencimiento: toNullableString(row.fechaVencimiento),
       mes: addOneMonthToMes(toNullableString(row.mes) ?? ''),
       fecUltPagCcap: toNullableString(row.fecUltPagCcap),
       fechaUltimoPago: toNullableString(row.fechaUltimoPago),
+      mesPasado: toNullableString(row.mesPasado),
+      fechaVencimientoPasado: toNullableString(row.fechaVencimientoPasado),
     }
   })
 
@@ -390,10 +421,15 @@ export async function queryBigQueryContactsCobranza(
     { name: 'nombre', type: 'STRING' },
     { name: 'telefono', type: 'STRING' },
     { name: 'monto', type: 'NUMERIC' },
+    { name: 'monto1', type: 'NUMERIC' },
+    { name: 'monto2', type: 'NUMERIC' },
+    { name: 'monto3', type: 'NUMERIC' },
     { name: 'fechaAsamblea', type: 'DATE' },
     { name: 'fechaVencimiento', type: 'DATE' },
     { name: 'mes', type: 'STRING' },
     { name: 'fecUltPagCcap', type: 'DATE' },
+    { name: 'mesPasado', type: 'STRING' },
+    { name: 'fechaVencimientoPasado', type: 'DATE' },
   ]
 
   return {

@@ -8,24 +8,29 @@ datasource db {
 }
 
 model Cliente {
-  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  codigoAsociado   String            @unique(map: "uq_clientes_codigo_asociado") @map("codigo_asociado") @db.VarChar(150)
-  dni              String            @unique(map: "uq_clientes_dni") @db.VarChar(20)
-  telefono         String            @db.VarChar(20)
-  nombre           String            @db.VarChar(150)
-  monto            Decimal           @default(0) @db.Decimal(12, 2)
-  probabilidad     Decimal?          @db.Decimal(5, 2)
-  segmento         String?           @db.VarChar(50)
-  estrategia       String?           @db.VarChar(50)
-  fechaAsamblea    DateTime?         @map("fecha_asamblea") @db.Date
-  fechaVencimiento DateTime?         @map("fecha_vencimiento") @db.Date
-  fecUltPagCcap    DateTime?         @map("fec_ult_pag_ccap") @db.Date
-  mes              String?           @db.VarChar(20)
-  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  frente           String?           @db.VarChar(100)
-  campaignContacts CampaignContact[]
-  chatMessages     ChatMessage[]
+  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  codigoAsociado         String            @unique(map: "uq_clientes_codigo_asociado") @map("codigo_asociado") @db.VarChar(150)
+  dni                    String            @unique(map: "uq_clientes_dni") @db.VarChar(20)
+  telefono               String            @db.VarChar(20)
+  nombre                 String            @db.VarChar(150)
+  monto                  Decimal           @default(0) @db.Decimal(12, 2)
+  probabilidad           Decimal?          @db.Decimal(5, 2)
+  segmento               String?           @db.VarChar(50)
+  estrategia             String?           @db.VarChar(50)
+  fechaAsamblea          DateTime?         @map("fecha_asamblea") @db.Date
+  fechaVencimiento       DateTime?         @map("fecha_vencimiento") @db.Date
+  fecUltPagCcap          DateTime?         @map("fec_ult_pag_ccap") @db.Date
+  mes                    String?           @db.VarChar(20)
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt              DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  frente                 String?           @db.VarChar(100)
+  fechaVencimientoPasado DateTime?         @map("fecha_vencimiento_pasado") @db.Date
+  mesPasado              String?           @map("mes_pasado") @db.VarChar(50)
+  monto1                 Decimal?          @map("monto_1") @db.Decimal(12, 2)
+  monto2                 Decimal?          @map("monto_2") @db.Decimal(12, 2)
+  monto3                 Decimal?          @map("monto_3") @db.Decimal(12, 2)
+  campaignContacts       CampaignContact[]
+  chatMessages           ChatMessage[]
 
   @@index([estrategia], map: "idx_clientes_estrategia")
   @@index([fechaVencimiento], map: "idx_clientes_fecha_vencimiento")
@@ -34,23 +39,23 @@ model Cliente {
 }
 
 model Template {
-  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nombre           String     @unique(map: "uq_templates_nombre") @db.VarChar(120)
-  descripcion      String?
-  contenido        String
-  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt        DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  metaId           String?    @map("meta_id") @db.VarChar(100)
-  estadoMeta       String?    @map("estado_meta") @db.VarChar(20)
-  categoria        String?    @db.VarChar(30)
-  idioma           String?    @db.VarChar(10)
-  header           String?
-  footer           String?
-  botones          Json?
-  birdProjectId    String?    @map("bird_project_id") @db.VarChar(100)
-  headerType       String?    @map("header_type") @db.VarChar(20)
-  headerMediaUrl   String?    @map("header_media_url")
-  campaigns        Campaign[]
+  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre         String     @unique(map: "uq_templates_nombre") @db.VarChar(120)
+  descripcion    String?
+  contenido      String
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  metaId         String?    @map("meta_id") @db.VarChar(100)
+  estadoMeta     String?    @map("estado_meta") @db.VarChar(20)
+  categoria      String?    @db.VarChar(30)
+  idioma         String?    @db.VarChar(10)
+  header         String?
+  footer         String?
+  botones        Json?
+  birdProjectId  String?    @map("bird_project_id") @db.VarChar(100)
+  headerType     String?    @map("header_type") @db.VarChar(20)
+  headerMediaUrl String?    @map("header_media_url")
+  campaigns      Campaign[]
 
   @@index([estadoMeta], map: "idx_templates_estado_meta")
   @@map("templates")
@@ -154,7 +159,7 @@ model WebhookLog {
 
 model ChatMessage {
   id             BigInt    @id @default(autoincrement())
-  wamid          String?   @unique(map: "chat_messages_wamid_key") @db.VarChar(255)
+  wamid          String?   @unique @db.VarChar(255)
   direction      String    @db.VarChar(10)
   phone          String    @db.VarChar(20)
   clienteId      String?   @map("cliente_id") @db.Uuid
@@ -166,7 +171,7 @@ model ChatMessage {
   tsMeta         DateTime? @map("ts_meta") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   status         String?   @db.VarChar(20)
-  cliente        Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  cliente        Cliente?  @relation(fields: [clienteId], references: [id], onUpdate: NoAction)
 
   @@index([phone, createdAt(sort: Desc)], map: "idx_chat_messages_phone_created")
   @@index([clienteId], map: "idx_chat_messages_cliente")

@@ -26,11 +26,16 @@ export interface CampaignContact {
   nombre: string
   telefono: string
   monto: number
+  monto1?: number | null
+  monto2?: number | null
+  monto3?: number | null
   fechaAsamblea?: string | Date | null
   fechaVencimiento?: string | Date | null
   mes?: string
   fecUltPagCcap?: string | Date | null
   fechaUltimoPago: string | Date | null
+  mesPasado?: string | null
+  fechaVencimientoPasado?: string | Date | null
 }
 
 export interface Campaign {
