@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     const onlyReplied = url.searchParams.get('onlyReplied') === 'true'
 
     const campaignFilter = campaignId
-      ? Prisma.sql`AND phones.phone IN (
+      ? Prisma.sql`AND cm.phone IN (
           SELECT DISTINCT
             CASE
               WHEN length(regexp_replace(cli.telefono, '[^0-9]', '', 'g')) = 10
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     const repliedFilter = onlyReplied
       ? Prisma.sql`AND EXISTS (
           SELECT 1 FROM sayasend.chat_messages inb
-          WHERE inb.phone = phones.phone AND inb.direction = 'inbound'
+          WHERE inb.phone = cm.phone AND inb.direction = 'inbound'
         )`
       : Prisma.empty
 
@@ -78,13 +78,15 @@ export async function GET(request: NextRequest) {
       campaignNombre = camp?.nombre ?? campaignId
     }
 
+    // La clave del fix: JOIN clientes por teléfono normalizado (no por cliente_id
+    // del mensaje) para que todos los mensajes inbound/outbound queden en una sola fila.
     const rows = await prisma.$queryRaw<ClientRow[]>(Prisma.sql`
       SELECT
-        c.id                       AS cliente_id,
-        c.nombre                   AS nombre,
-        c.telefono                 AS telefono_raw,
         phones.phone               AS phone,
-        c.segmento                 AS segmento,
+        cli.id                     AS cliente_id,
+        cli.nombre                 AS nombre,
+        cli.telefono               AS telefono_raw,
+        cli.segmento               AS segmento,
         json_agg(
           json_build_object(
             'created_at',    m.created_at,
@@ -95,16 +97,22 @@ export async function GET(request: NextRequest) {
           ) ORDER BY m.created_at ASC
         ) AS mensajes
       FROM (
-        SELECT DISTINCT phone
-        FROM sayasend.chat_messages
+        SELECT DISTINCT cm.phone
+        FROM sayasend.chat_messages cm
+        WHERE 1=1
+          ${campaignFilter}
+          ${repliedFilter}
       ) phones
       JOIN sayasend.chat_messages m ON m.phone = phones.phone
-      LEFT JOIN sayasend.clientes c ON c.id = m.cliente_id
-      WHERE 1=1
-        ${campaignFilter}
-        ${repliedFilter}
-      GROUP BY c.id, c.nombre, c.telefono, phones.phone, c.segmento
-      ORDER BY c.nombre ASC NULLS LAST
+      LEFT JOIN sayasend.clientes cli ON (
+        CASE
+          WHEN length(regexp_replace(cli.telefono, '[^0-9]', '', 'g')) = 10
+          THEN '+57' || regexp_replace(cli.telefono, '[^0-9]', '', 'g')
+          ELSE '+' || regexp_replace(cli.telefono, '[^0-9]', '', 'g')
+        END = phones.phone
+      )
+      GROUP BY phones.phone, cli.id, cli.nombre, cli.telefono, cli.segmento
+      ORDER BY cli.nombre ASC NULLS LAST
     `)
 
     const sheetData: Record<string, unknown>[] = rows.map((row) => {
