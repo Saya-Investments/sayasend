@@ -77,7 +77,6 @@ export async function GET(request: NextRequest) {
         ${campaignFilter}
         ${repliedFilter}
       ORDER BY l.created_at DESC
-      LIMIT 500;
     `)
 
     return NextResponse.json({ success: true, data: rows })

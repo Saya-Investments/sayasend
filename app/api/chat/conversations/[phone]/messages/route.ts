@@ -27,13 +27,13 @@ export async function GET(
     }
 
     const url = new URL(request.url)
-    const limit = Math.min(Number(url.searchParams.get('limit') ?? 200), 500)
+    const limit = Number(url.searchParams.get('limit') ?? 0) || undefined
     const offset = Math.max(Number(url.searchParams.get('offset') ?? 0), 0)
 
     const messages = await prisma.chatMessage.findMany({
       where: { phone },
       orderBy: { createdAt: 'asc' },
-      take: limit,
+      ...(limit ? { take: limit } : {}),
       skip: offset,
     })
 
