@@ -58,7 +58,12 @@ export async function GET(request: NextRequest) {
 
     const campaignFilter = campaignId
       ? Prisma.sql`AND phones.phone IN (
-          SELECT DISTINCT '+' || regexp_replace(cli.telefono, '[^0-9]', '', 'g')
+          SELECT DISTINCT
+            CASE
+              WHEN length(regexp_replace(cli.telefono, '[^0-9]', '', 'g')) = 10
+              THEN '+57' || regexp_replace(cli.telefono, '[^0-9]', '', 'g')
+              ELSE '+' || regexp_replace(cli.telefono, '[^0-9]', '', 'g')
+            END
           FROM sayasend.campaign_contacts cc
           JOIN sayasend.clientes cli ON cli.id = cc.cliente_id
           WHERE cc.campaign_id = ${campaignId}::uuid
