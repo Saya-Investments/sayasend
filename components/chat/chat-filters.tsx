@@ -61,7 +61,7 @@ export function ChatFilters({
       const blob = await res.blob()
       const filename =
         res.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] ??
-        'chat-export.csv'
+        'chat-export.xlsx'
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

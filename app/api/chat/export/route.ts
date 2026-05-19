@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
+import * as XLSX from 'xlsx'
 
 import { prisma } from '@/lib/prisma'
 
@@ -22,15 +23,6 @@ type ClientRow = {
   mensajes: MsgJson[] | null
 }
 
-function escapeCSV(val: unknown): string {
-  if (val === null || val === undefined) return ''
-  const s = String(val)
-  if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
-    return `"${s.replace(/"/g, '""')}"`
-  }
-  return s
-}
-
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString('es-CO', {
@@ -47,7 +39,7 @@ function formatDate(iso: string): string {
 }
 
 // GET /api/chat/export?campaignId=<uuid>&onlyReplied=true
-// Exporta un CSV con una fila por cliente y sus mensajes concatenados.
+// Exporta un Excel con una fila por cliente y sus mensajes concatenados.
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)
@@ -115,17 +107,7 @@ export async function GET(request: NextRequest) {
       ORDER BY c.nombre ASC NULLS LAST
     `)
 
-    const headers = [
-      'nombre',
-      'telefono',
-      'segmento',
-      'campaña',
-      'total_mensajes',
-      'mensajes',
-    ]
-    const csvLines: string[] = [headers.join(',')]
-
-    for (const row of rows) {
+    const sheetData: Record<string, unknown>[] = rows.map((row) => {
       const msgs: MsgJson[] = Array.isArray(row.mensajes) ? row.mensajes : []
       const mensajesStr = msgs
         .map((msg) => {
@@ -136,26 +118,50 @@ export async function GET(request: NextRequest) {
             (msg.template_name ? `[template: ${msg.template_name}]` : '')
           return `[${fecha} ${dir}] ${texto}`
         })
-        .join(' | ')
+        .join('\n')
 
-      const line = [
-        escapeCSV(row.nombre ?? row.phone),
-        escapeCSV(row.telefono_raw ?? row.phone),
-        escapeCSV(row.segmento),
-        escapeCSV(campaignNombre),
-        escapeCSV(msgs.length),
-        escapeCSV(mensajesStr),
-      ].join(',')
-      csvLines.push(line)
+      return {
+        Nombre: row.nombre ?? row.phone,
+        Teléfono: row.telefono_raw ?? row.phone,
+        Segmento: row.segmento ?? '',
+        Campaña: campaignNombre,
+        'Total mensajes': msgs.length,
+        Mensajes: mensajesStr,
+      }
+    })
+
+    const ws = XLSX.utils.json_to_sheet(sheetData)
+
+    // Anchos de columna
+    ws['!cols'] = [
+      { wch: 30 }, // Nombre
+      { wch: 18 }, // Teléfono
+      { wch: 14 }, // Segmento
+      { wch: 28 }, // Campaña
+      { wch: 16 }, // Total mensajes
+      { wch: 80 }, // Mensajes
+    ]
+
+    // Ajuste de texto en la columna Mensajes (columna F)
+    const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1')
+    for (let r = 1; r <= range.e.r; r++) {
+      const cellRef = XLSX.utils.encode_cell({ r, c: 5 })
+      if (ws[cellRef]) {
+        ws[cellRef].s = { alignment: { wrapText: true, vertical: 'top' } }
+      }
     }
 
-    const bom = '﻿'
-    const csv = bom + csvLines.join('\r\n')
-    const filename = `chat-${campaignNombre.replace(/[^a-z0-9]/gi, '-')}-${new Date().toISOString().slice(0, 10)}.csv`
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Chat')
 
-    return new NextResponse(csv, {
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    const safeName = campaignNombre.replace(/[^a-z0-9]/gi, '-')
+    const filename = `chat-${safeName}-${new Date().toISOString().slice(0, 10)}.xlsx`
+
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Type':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
