@@ -70,8 +70,8 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
       setFeedback({ type: 'error', message: 'El archivo debe ser una imagen' })
       return
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setFeedback({ type: 'error', message: 'La imagen no puede pesar más de 5MB' })
+    if (file.size > 4 * 1024 * 1024) {
+      setFeedback({ type: 'error', message: 'La imagen no puede pesar más de 4MB' })
       return
     }
 

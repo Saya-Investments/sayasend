@@ -76,8 +76,8 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
       setError('El archivo debe ser una imagen (JPEG, PNG, WebP)')
       return
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('La imagen no puede pesar más de 5MB (límite de WhatsApp)')
+    if (file.size > 4 * 1024 * 1024) {
+      setError('La imagen no puede pesar más de 4MB')
       return
     }
 
@@ -264,7 +264,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
                     Seleccionar imagen
                   </Button>
                   <p className="text-xs text-muted-foreground mt-2">
-                    JPEG, PNG o WebP. Máximo 5MB.
+                    JPEG, PNG o WebP. Máximo 4MB.
                   </p>
                 </div>
               )}
