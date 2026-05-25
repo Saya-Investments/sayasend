@@ -258,6 +258,7 @@ export function CampaignForm() {
     const excelColumns: BigQueryColumn[] = [
       { name: 'numDoc', type: 'STRING' },
       { name: 'telefono', type: 'STRING' },
+      ...(foundOptionalColumns.includes('nombre') ? [{ name: 'nombre', type: 'STRING' }] : []),
       ...(foundOptionalColumns.includes('monto') ? [{ name: 'monto', type: 'FLOAT' }] : []),
       ...(foundOptionalColumns.includes('fechaVencimiento') ? [{ name: 'fechaVencimiento', type: 'DATE' }] : []),
     ]
@@ -598,7 +599,8 @@ export function CampaignForm() {
                 <p className="text-xs text-muted-foreground">
                   Columnas obligatorias: <span className="font-mono">Num Doc</span> (o DNI, Cédula…) y{' '}
                   <span className="font-mono">Telefono</span> (o Celular, Movil…).{' '}
-                  Columnas opcionales: <span className="font-mono">Monto</span> y{' '}
+                  Columnas opcionales: <span className="font-mono">Nombre</span>,{' '}
+                  <span className="font-mono">Monto</span> y{' '}
                   <span className="font-mono">Fecha Vencimiento</span> — si están presentes se guardarán en la BD.
                 </p>
               </div>
