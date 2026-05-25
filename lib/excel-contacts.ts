@@ -91,6 +91,19 @@ const MONTO_ALIASES = [
   'total',
 ]
 
+const NOMBRE_ALIASES = [
+  'nombre',
+  'nombres',
+  'name',
+  'nombre completo',
+  'nombres y apellidos',
+  'apellidos y nombres',
+  'cliente',
+  'nombre cliente',
+  'razón social',
+  'razon social',
+]
+
 const FECHA_VENCIMIENTO_ALIASES = [
   'fecha vencimiento',
   'fecha de vencimiento',
@@ -196,6 +209,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
     const numDocIdx = findHeaderIndex(headerRow, NUM_DOC_ALIASES)
     const telefonoIdx = findHeaderIndex(headerRow, TELEFONO_ALIASES)
     const codigoAsociadoIdx = findHeaderIndex(headerRow, CODIGO_ASOCIADO_ALIASES)
+    const nombreIdx = findHeaderIndex(headerRow, NOMBRE_ALIASES)
     const montoIdx = findHeaderIndex(headerRow, MONTO_ALIASES)
     const fechaVencimientoIdx = findHeaderIndex(headerRow, FECHA_VENCIMIENTO_ALIASES)
 
@@ -219,6 +233,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
     }
 
     const foundOptionalColumns: string[] = []
+    if (nombreIdx !== -1) foundOptionalColumns.push('nombre')
     if (montoIdx !== -1) foundOptionalColumns.push('monto')
     if (fechaVencimientoIdx !== -1) foundOptionalColumns.push('fechaVencimiento')
 
@@ -247,7 +262,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
         codigoAsociado,
         numDoc,
         telefono,
-        nombre: '',
+        nombre: nombreIdx !== -1 ? castCellToString(row[nombreIdx]) : '',
         segmento: '',
         monto: montoIdx !== -1 ? parseMonto(row[montoIdx]) : 0,
         fechaUltimoPago: null,
