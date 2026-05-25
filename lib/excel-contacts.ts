@@ -274,14 +274,29 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
       return { success: false, error: 'El archivo no contiene filas válidas con "Num Doc".' }
     }
 
+    const seenDnis = new Set<string>()
+    const uniqueContacts: CampaignContact[] = []
+    let skippedDuplicateDni = 0
+    for (const contact of contacts) {
+      if (seenDnis.has(contact.numDoc)) {
+        skippedDuplicateDni++
+      } else {
+        seenDnis.add(contact.numDoc)
+        uniqueContacts.push(contact)
+      }
+    }
+
     if (skippedEmpty > 0) {
       warnings.push(`Se omitieron ${skippedEmpty} filas vacías.`)
     }
     if (skippedNoDoc > 0) {
       warnings.push(`Se omitieron ${skippedNoDoc} filas sin "Num Doc".`)
     }
+    if (skippedDuplicateDni > 0) {
+      warnings.push(`Se omitieron ${skippedDuplicateDni} filas con DNI duplicado (se conservó la primera aparición).`)
+    }
 
-    return { success: true, contacts, warnings, foundOptionalColumns }
+    return { success: true, contacts: uniqueContacts, warnings, foundOptionalColumns }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error desconocido al leer el archivo.'
     return { success: false, error: `No se pudo procesar el archivo: ${message}` }

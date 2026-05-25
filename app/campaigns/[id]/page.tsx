@@ -48,8 +48,10 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
           cliente: {
             ...cc.cliente,
             monto: Number(cc.cliente.monto),
-            probabilidad:
-              cc.cliente.probabilidad === null ? null : Number(cc.cliente.probabilidad),
+            monto1: cc.cliente.monto1 === null ? null : Number(cc.cliente.monto1),
+            monto2: cc.cliente.monto2 === null ? null : Number(cc.cliente.monto2),
+            monto3: cc.cliente.monto3 === null ? null : Number(cc.cliente.monto3),
+            probabilidad: cc.cliente.probabilidad === null ? null : Number(cc.cliente.probabilidad),
           },
         })),
       }

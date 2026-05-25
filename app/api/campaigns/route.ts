@@ -150,18 +150,25 @@ export async function POST(request: NextRequest) {
         const toCreate: ReturnType<typeof buildClienteData>[] = []
         const toUpdate: Array<{ id: string; data: ReturnType<typeof buildClienteData> }> = []
         const existingClienteIds: string[] = []
+        const seenDnis = new Set<string>()
+        const seenCodigos = new Set<string>()
 
         for (const contact of body.contacts) {
           const data = buildClienteData(contact)
-          const existingId =
-            byDni.get(toStringField(contact.numDoc)) ??
-            byCodigo.get(toStringField(contact.codigoAsociado))
+          const dni = toStringField(contact.numDoc)
+          const codigo = toStringField(contact.codigoAsociado)
+          const existingId = byDni.get(dni) ?? byCodigo.get(codigo)
           if (existingId) {
             if (!isExcelSource) {
               toUpdate.push({ id: existingId, data })
             }
             existingClienteIds.push(existingId)
           } else {
+            if ((dni && seenDnis.has(dni)) || (codigo && seenCodigos.has(codigo))) {
+              continue
+            }
+            if (dni) seenDnis.add(dni)
+            if (codigo) seenCodigos.add(codigo)
             toCreate.push(data)
           }
         }
