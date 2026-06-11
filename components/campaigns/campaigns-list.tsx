@@ -22,6 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
   scheduled: 'Programada',
   sending: 'Enviando',
   completed: 'Completada',
+  failed: 'Fallida',
 }
 
 const STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default' | 'destructive'> = {
@@ -29,6 +30,7 @@ const STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default' | 'dest
   scheduled: 'outline',
   sending: 'default',
   completed: 'default',
+  failed: 'destructive',
 }
 
 export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {

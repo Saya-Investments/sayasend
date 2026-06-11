@@ -105,3 +105,50 @@ export async function sendCampaignCompletionEmail(data: CampaignNotificationData
     html,
   })
 }
+
+export type CampaignFailureData = {
+  campaignId: string
+  campaignName: string
+  reason: string
+  failedAt: Date
+}
+
+export async function sendCampaignFailedEmail(data: CampaignFailureData) {
+  const transporter = getTransporter()
+  const from = process.env.GMAIL_USER
+
+  const fecha = data.failedAt.toLocaleString('es-CO', {
+    timeZone: 'America/Bogota',
+    dateStyle: 'long',
+    timeStyle: 'short',
+  })
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+      <div style="background: #7f1d1d; padding: 24px 32px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px;">Campaña fallida</h1>
+        <p style="color: #fecaca; margin: 4px 0 0; font-size: 14px;">${fecha}</p>
+      </div>
+
+      <div style="border: 1px solid #e2e8f0; border-top: none; padding: 32px; border-radius: 0 0 8px 8px;">
+        <h2 style="margin: 0 0 16px; font-size: 22px; color: #0f172a;">${data.campaignName}</h2>
+
+        <div style="padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px;">
+          <div style="font-size: 12px; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.05em;">Motivo</div>
+          <div style="font-size: 15px; color: #7f1d1d; margin-top: 4px;">${data.reason}</div>
+        </div>
+
+        <p style="margin: 24px 0 0; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+          Sayasend · Motor de Envíos
+        </p>
+      </div>
+    </div>
+  `
+
+  await transporter.sendMail({
+    from: `"Sayasend" <${from}>`,
+    to: NOTIFICATION_RECIPIENTS.join(', '),
+    subject: `⚠️ Campaña fallida: ${data.campaignName}`,
+    html,
+  })
+}

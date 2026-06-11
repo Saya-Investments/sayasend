@@ -46,6 +46,7 @@ function extractTemplateVariables(contenido: string) {
 }
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -99,6 +100,7 @@ export function CampaignForm() {
   })
   const [contactsPage, setContactsPage] = useState(1)
   const [activeGestionType, setActiveGestionType] = useState<'gestion_m0' | 'gestion_cobranza' | null>(null)
+  const [refreshOnSend, setRefreshOnSend] = useState(false)
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(true)
   const [isLoadingContacts, setIsLoadingContacts] = useState(false)
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false)
@@ -386,6 +388,8 @@ export function CampaignForm() {
           : {},
       variableMappings,
       contacts: filteredContacts,
+      gestionType: source === 'bigquery' ? activeGestionType ?? undefined : undefined,
+      refreshOnSend: source === 'bigquery' ? refreshOnSend : false,
     }
 
     const response = await createCampaign(payload)
@@ -873,6 +877,30 @@ export function CampaignForm() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {showContacts && source === 'bigquery' && (
+        <Card>
+          <CardContent className="flex items-start gap-3 py-4">
+            <Checkbox
+              id="refresh-on-send"
+              checked={refreshOnSend}
+              onCheckedChange={(value) => setRefreshOnSend(value === true)}
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="refresh-on-send" className="cursor-pointer">
+                Usar base actualizada del día de envío
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Si la programas para una fecha futura, los contactos se volverán a
+                consultar en BigQuery ese mismo día (con estos mismos filtros) en
+                lugar de usar la lista de hoy. Si ese día no hay contactos, la
+                campaña se marcará como fallida y se enviará un aviso por correo.
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}

@@ -78,6 +78,8 @@ model Campaign {
   variableMappings     Json              @default("{}") @map("variable_mappings")
   frenteFilter         String?           @map("frente_filter") @db.VarChar(100)
   notificationSentAt   DateTime?         @map("notification_sent_at") @db.Timestamp(6)
+  refreshOnSend        Boolean           @default(false) @map("refresh_on_send")
+  gestionType          String?           @map("gestion_type") @db.VarChar(20)
   campaignContacts     CampaignContact[]
   template         Template          @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   mensajeOuts      MensajeOut[]

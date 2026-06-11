@@ -54,7 +54,7 @@ export interface Campaign {
   }
   totalContacts: number
   createdAt: Date
-  status: 'draft' | 'scheduled' | 'sending' | 'completed'
+  status: 'draft' | 'scheduled' | 'sending' | 'completed' | 'failed'
 }
 
 export interface ContactabilityMetrics {
@@ -91,6 +91,8 @@ export interface BigQueryContactsPayload {
 
 export type CampaignSource = 'bigquery' | 'excel'
 
+export type GestionType = 'gestion_m0' | 'gestion_cobranza'
+
 export interface CreateCampaignPayload {
   name: string
   templateId?: string | null
@@ -105,4 +107,10 @@ export interface CreateCampaignPayload {
     [variablePlaceholder: string]: string
   }
   contacts: CampaignContact[]
+  // Tipo de gestión usado al consultar BigQuery — se persiste para poder
+  // reconstruir la consulta el día del envío cuando refreshOnSend es true.
+  gestionType?: GestionType
+  // "Usar base actualizada del día de envío": si es true, el scheduler
+  // re-consulta BigQuery el día del envío en vez de usar la foto de creación.
+  refreshOnSend?: boolean
 }

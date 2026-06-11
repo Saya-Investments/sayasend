@@ -58,6 +58,7 @@ const STATUS_LABEL: Record<string, string> = {
   scheduled: 'Programada',
   sending: 'Enviando',
   completed: 'Completada',
+  failed: 'Fallida',
 }
 
 const CONTACT_STATUS_LABEL: Record<string, string> = {
