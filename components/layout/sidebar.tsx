@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Mail, Send, MessageCircle } from 'lucide-react'
+import { Mail, Send, MessageCircle, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Sidebar() {
@@ -18,6 +18,13 @@ export function Sidebar() {
       title: 'Campañas',
       href: '/campaigns',
       icon: Send,
+      // No marcar "Campañas" como activa cuando estamos en el calendario.
+      excludeHref: '/campaigns/calendar',
+    },
+    {
+      title: 'Calendario',
+      href: '/campaigns/calendar',
+      icon: CalendarDays,
     },
     {
       title: 'Chat',
@@ -31,7 +38,9 @@ export function Sidebar() {
       <div className="p-6 space-y-4">
         {items.map((item) => {
           const Icon = item.icon
-          const isActive = pathname.startsWith(item.href)
+          const isActive =
+            pathname.startsWith(item.href) &&
+            !(item.excludeHref && pathname.startsWith(item.excludeHref))
           
           return (
             <Link
