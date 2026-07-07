@@ -50,6 +50,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MultiSelect } from '@/components/ui/multi-select'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
@@ -83,9 +84,9 @@ export function CampaignForm() {
   const [excelWarnings, setExcelWarnings] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [databaseName, setDatabaseName] = useState('')
-  const [segmento, setSegmento] = useState('')
-  const [estrategia, setEstrategia] = useState('')
-  const [frente, setFrente] = useState('')
+  const [selectedSegmentos, setSelectedSegmentos] = useState<string[]>([])
+  const [selectedEstrategias, setSelectedEstrategias] = useState<string[]>([])
+  const [selectedFrentes, setSelectedFrentes] = useState<string[]>([])
   const [frentes, setFrentes] = useState<string[]>([])
   const [isLoadingFrentes, setIsLoadingFrentes] = useState(false)
   const [estrategias, setEstrategias] = useState<string[]>([])
@@ -172,9 +173,9 @@ export function CampaignForm() {
   useEffect(() => {
     if (source !== 'bigquery' || !databaseName) {
       setFrentes([])
-      setFrente('')
+      setSelectedFrentes([])
       setEstrategias([])
-      setEstrategia('')
+      setSelectedEstrategias([])
       return
     }
 
@@ -216,8 +217,8 @@ export function CampaignForm() {
     setAvailableColumns([])
     setVariableMappings({})
     setSuccessMessage('')
-    setFrente('')
-    setEstrategia('')
+    setSelectedFrentes([])
+    setSelectedEstrategias([])
     setContactsPage(1)
     setExcelFileName('')
     setExcelWarnings([])
@@ -230,7 +231,7 @@ export function CampaignForm() {
     if (next === source) return
     setSource(next)
     setDatabaseName('')
-    setSegmento('')
+    setSelectedSegmentos([])
     setErrorMessage('')
     resetContactSelection()
   }
@@ -290,9 +291,9 @@ export function CampaignForm() {
 
     const response = await getBigQueryContacts({
       databaseName,
-      segmento: segmento || undefined,
-      estrategia: estrategia || undefined,
-      frente: frente || undefined,
+      segmento: selectedSegmentos.length > 0 ? selectedSegmentos : undefined,
+      estrategia: selectedEstrategias.length > 0 ? selectedEstrategias : undefined,
+      frente: selectedFrentes.length > 0 ? selectedFrentes : undefined,
       gestionType,
     })
 
@@ -381,9 +382,9 @@ export function CampaignForm() {
       segmentFilters:
         source === 'bigquery'
           ? {
-              segmento: segmento || undefined,
-              estrategia: estrategia || undefined,
-              frente: frente || undefined,
+              segmento: selectedSegmentos.length > 0 ? selectedSegmentos : undefined,
+              estrategia: selectedEstrategias.length > 0 ? selectedEstrategias : undefined,
+              frente: selectedFrentes.length > 0 ? selectedFrentes : undefined,
             }
           : {},
       variableMappings,
@@ -486,76 +487,53 @@ export function CampaignForm() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="segmento">Segmento</Label>
-                  <Select
-                    value={segmento || 'all'}
-                    onValueChange={(value) => setSegmento(value === 'all' ? '' : value)}
-                  >
-                    <SelectTrigger id="segmento" className="w-full">
-                      <SelectValue placeholder="Selecciona un segmento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="ALTA">ALTA</SelectItem>
-                      <SelectItem value="MEDIA">MEDIA</SelectItem>
-                      <SelectItem value="BAJA">BAJA</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <MultiSelect
+                    id="segmento"
+                    value={selectedSegmentos}
+                    onChange={setSelectedSegmentos}
+                    placeholder="Todos"
+                    options={[
+                      { value: 'ALTA' },
+                      { value: 'MEDIA' },
+                      { value: 'BAJA' },
+                    ]}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="estrategia">Estrategia</Label>
-                  <Select
-                    value={estrategia || 'all'}
-                    onValueChange={(value) => setEstrategia(value === 'all' ? '' : value)}
+                  <MultiSelect
+                    id="estrategia"
+                    value={selectedEstrategias}
+                    onChange={setSelectedEstrategias}
                     disabled={!databaseName || isLoadingEstrategias}
-                  >
-                    <SelectTrigger id="estrategia" className="w-full">
-                      <SelectValue
-                        placeholder={
-                          !databaseName
-                            ? 'Selecciona una tabla primero'
-                            : isLoadingEstrategias
-                              ? 'Cargando estrategias...'
-                              : 'Selecciona una estrategia'
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      {estrategias.map((estrategiaOption) => (
-                        <SelectItem key={estrategiaOption} value={estrategiaOption}>
-                          {estrategiaOption}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={
+                      !databaseName
+                        ? 'Selecciona una tabla primero'
+                        : isLoadingEstrategias
+                          ? 'Cargando estrategias...'
+                          : 'Todas'
+                    }
+                    emptyText="No hay estrategias"
+                    options={estrategias.map((estrategiaOption) => ({ value: estrategiaOption }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="frente">Frente</Label>
-                  <Select
-                    value={frente || 'all'}
-                    onValueChange={(value) => setFrente(value === 'all' ? '' : value)}
+                  <MultiSelect
+                    id="frente"
+                    value={selectedFrentes}
+                    onChange={setSelectedFrentes}
                     disabled={!databaseName || isLoadingFrentes}
-                  >
-                    <SelectTrigger id="frente" className="w-full">
-                      <SelectValue
-                        placeholder={
-                          !databaseName
-                            ? 'Selecciona una tabla primero'
-                            : isLoadingFrentes
-                              ? 'Cargando frentes...'
-                              : 'Selecciona un frente'
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      {frentes.map((frenteOption) => (
-                        <SelectItem key={frenteOption} value={frenteOption}>
-                          {frenteOption}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={
+                      !databaseName
+                        ? 'Selecciona una tabla primero'
+                        : isLoadingFrentes
+                          ? 'Cargando frentes...'
+                          : 'Todos'
+                    }
+                    emptyText="No hay frentes"
+                    options={frentes.map((frenteOption) => ({ value: frenteOption }))}
+                  />
                 </div>
               </div>
 

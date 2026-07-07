@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { freezeCampaignContacts } from '@/lib/campaign-contacts'
 import { prisma } from '@/lib/prisma'
+import { serializeFilterValue } from '@/lib/segment-filters'
 import type { CreateCampaignPayload, GestionType } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -69,9 +70,9 @@ export async function POST(request: NextRequest) {
           templateId,
           databaseName: body.databaseName.trim(),
           sendMode: (body as { sendMode?: string }).sendMode ?? 'M0',
-          segmentoFilter: body.segmentFilters.segmento || null,
-          estrategiaFilter: body.segmentFilters.estrategia || null,
-          frenteFilter: body.segmentFilters.frente || null,
+          segmentoFilter: serializeFilterValue(body.segmentFilters.segmento),
+          estrategiaFilter: serializeFilterValue(body.segmentFilters.estrategia),
+          frenteFilter: serializeFilterValue(body.segmentFilters.frente),
           variableMappings: body.variableMappings ?? {},
           totalContacts: body.contacts.length,
           status: 'draft',

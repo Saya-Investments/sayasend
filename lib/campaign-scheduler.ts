@@ -2,6 +2,7 @@ import { queryBigQueryContacts, queryBigQueryContactsCobranza } from '@/lib/bigq
 import { freezeCampaignContacts } from '@/lib/campaign-contacts'
 import { sendCampaignFailedEmail } from '@/lib/email'
 import { prisma } from '@/lib/prisma'
+import { parseFilterValue } from '@/lib/segment-filters'
 
 type SendScheduledCampaignResult = {
   campaignId: string
@@ -46,10 +47,13 @@ type DueCampaign = {
 // fresca de hoy. Devuelve cuántos contactos quedaron. Si devuelve 0, el caller
 // debe marcar la campaña como fallida.
 async function refreshCampaignContacts(campaign: DueCampaign): Promise<number> {
+  const segmento = parseFilterValue(campaign.segmentoFilter)
+  const estrategia = parseFilterValue(campaign.estrategiaFilter)
+  const frente = parseFilterValue(campaign.frenteFilter)
   const filters = {
-    segmento: campaign.segmentoFilter || undefined,
-    estrategia: campaign.estrategiaFilter || undefined,
-    frente: campaign.frenteFilter || undefined,
+    segmento: segmento.length > 0 ? segmento : undefined,
+    estrategia: estrategia.length > 0 ? estrategia : undefined,
+    frente: frente.length > 0 ? frente : undefined,
   }
 
   const payload =

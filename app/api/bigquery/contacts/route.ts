@@ -5,11 +5,15 @@ import { queryBigQueryContacts, queryBigQueryContactsCobranza } from '@/lib/bigq
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
-  const tableName = request.nextUrl.searchParams.get('databaseName')?.trim()
-  const segmento = request.nextUrl.searchParams.get('segmento')?.trim() ?? ''
-  const estrategia = request.nextUrl.searchParams.get('estrategia')?.trim() ?? ''
-  const frente = request.nextUrl.searchParams.get('frente')?.trim() ?? ''
-  const gestionType = request.nextUrl.searchParams.get('gestionType')?.trim() ?? 'gestion_m0'
+  const params = request.nextUrl.searchParams
+  const tableName = params.get('databaseName')?.trim()
+  // Cada filtro admite múltiples valores (parámetros repetidos en la URL).
+  const cleanList = (values: string[]) =>
+    values.map((v) => v.trim()).filter((v) => v.length > 0)
+  const segmento = cleanList(params.getAll('segmento'))
+  const estrategia = cleanList(params.getAll('estrategia'))
+  const frente = cleanList(params.getAll('frente'))
+  const gestionType = params.get('gestionType')?.trim() ?? 'gestion_m0'
 
   if (!tableName) {
     return NextResponse.json(
@@ -23,9 +27,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const filters = {
-      segmento: segmento || undefined,
-      estrategia: estrategia || undefined,
-      frente: frente || undefined,
+      segmento: segmento.length > 0 ? segmento : undefined,
+      estrategia: estrategia.length > 0 ? estrategia : undefined,
+      frente: frente.length > 0 ? frente : undefined,
     }
 
     const result = gestionType === 'gestion_cobranza'

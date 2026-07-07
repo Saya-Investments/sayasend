@@ -45,9 +45,9 @@ export interface Campaign {
   databaseName: string
   sendMode?: 'M0' | 'M1' | null
   segmentFilters: {
-    segmento?: string
-    estrategia?: string
-    frente?: string
+    segmento?: string | string[]
+    estrategia?: string | string[]
+    frente?: string | string[]
   }
   variableMappings: {
     [variablePlaceholder: string]: string
@@ -99,9 +99,9 @@ export interface CreateCampaignPayload {
   source?: CampaignSource
   databaseName: string
   segmentFilters: {
-    segmento?: string
-    estrategia?: string
-    frente?: string
+    segmento?: string | string[]
+    estrategia?: string | string[]
+    frente?: string | string[]
   }
   variableMappings: {
     [variablePlaceholder: string]: string

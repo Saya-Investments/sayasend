@@ -21,9 +21,17 @@ export type BigQueryTableInfo = {
 }
 
 export type BigQueryContactFilters = {
-  segmento?: string
-  estrategia?: string
-  frente?: string
+  segmento?: string | string[]
+  estrategia?: string | string[]
+  frente?: string | string[]
+}
+
+// Normaliza un filtro (string único, arreglo o undefined) a una lista de
+// valores no vacíos. Permite seleccionar varios valores por filtro.
+function toFilterList(value?: string | string[]): string[] {
+  if (value == null) return []
+  const arr = Array.isArray(value) ? value : [value]
+  return arr.map((v) => String(v).trim()).filter((v) => v.length > 0)
 }
 
 let bigQueryClient: BigQuery | null = null
@@ -251,21 +259,24 @@ export async function queryBigQueryContactsCobranza(
   validateTableName(tableName)
 
   const clauses: string[] = []
-  const params: Record<string, string> = {}
+  const params: Record<string, string | string[]> = {}
 
-  if (filters.segmento) {
-    clauses.push('CAST(src.`segmento` AS STRING) = @segmento')
-    params.segmento = filters.segmento
+  const segmentos = toFilterList(filters.segmento)
+  if (segmentos.length > 0) {
+    clauses.push('CAST(src.`segmento` AS STRING) IN UNNEST(@segmento)')
+    params.segmento = segmentos
   }
 
-  if (filters.estrategia) {
-    clauses.push('CAST(src.`estrategia` AS STRING) = @estrategia')
-    params.estrategia = filters.estrategia
+  const estrategias = toFilterList(filters.estrategia)
+  if (estrategias.length > 0) {
+    clauses.push('CAST(src.`estrategia` AS STRING) IN UNNEST(@estrategia)')
+    params.estrategia = estrategias
   }
 
-  if (filters.frente) {
-    clauses.push('CAST(src.`Frente` AS STRING) = @frente')
-    params.frente = filters.frente
+  const frentes = toFilterList(filters.frente)
+  if (frentes.length > 0) {
+    clauses.push('CAST(src.`Frente` AS STRING) IN UNNEST(@frente)')
+    params.frente = frentes
   }
 
   const whereClause = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : ''
@@ -445,21 +456,24 @@ export async function queryBigQueryContacts(
   validateTableName(tableName)
 
   const clauses: string[] = []
-  const params: Record<string, string> = {}
+  const params: Record<string, string | string[]> = {}
 
-  if (filters.segmento) {
-    clauses.push('CAST(src.`segmento` AS STRING) = @segmento')
-    params.segmento = filters.segmento
+  const segmentos = toFilterList(filters.segmento)
+  if (segmentos.length > 0) {
+    clauses.push('CAST(src.`segmento` AS STRING) IN UNNEST(@segmento)')
+    params.segmento = segmentos
   }
 
-  if (filters.estrategia) {
-    clauses.push('CAST(src.`estrategia` AS STRING) = @estrategia')
-    params.estrategia = filters.estrategia
+  const estrategias = toFilterList(filters.estrategia)
+  if (estrategias.length > 0) {
+    clauses.push('CAST(src.`estrategia` AS STRING) IN UNNEST(@estrategia)')
+    params.estrategia = estrategias
   }
 
-  if (filters.frente) {
-    clauses.push('CAST(src.`Frente` AS STRING) = @frente')
-    params.frente = filters.frente
+  const frentes = toFilterList(filters.frente)
+  if (frentes.length > 0) {
+    clauses.push('CAST(src.`Frente` AS STRING) IN UNNEST(@frente)')
+    params.frente = frentes
   }
 
   const whereClause = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : ''

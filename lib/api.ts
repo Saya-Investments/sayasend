@@ -165,18 +165,27 @@ export async function getBigQueryDatabases() {
 
 export async function getBigQueryContacts(filters: {
   databaseName: string
-  segmento?: string
-  estrategia?: string
-  frente?: string
+  segmento?: string | string[]
+  estrategia?: string | string[]
+  frente?: string | string[]
   gestionType?: 'gestion_m0' | 'gestion_cobranza'
 }) {
   const queryParams = new URLSearchParams({
     databaseName: filters.databaseName,
   })
 
-  if (filters.segmento) queryParams.append('segmento', filters.segmento)
-  if (filters.estrategia) queryParams.append('estrategia', filters.estrategia)
-  if (filters.frente) queryParams.append('frente', filters.frente)
+  // Cada filtro puede llevar varios valores: se envían como parámetros repetidos
+  // (?segmento=A&segmento=B) para que el backend los lea con getAll().
+  const appendMulti = (key: string, value?: string | string[]) => {
+    if (!value) return
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item) queryParams.append(key, item)
+    }
+  }
+
+  appendMulti('segmento', filters.segmento)
+  appendMulti('estrategia', filters.estrategia)
+  appendMulti('frente', filters.frente)
   if (filters.gestionType) queryParams.append('gestionType', filters.gestionType)
 
   return internalApiCall(`/api/bigquery/contacts?${queryParams.toString()}`)

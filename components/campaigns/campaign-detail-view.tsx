@@ -9,6 +9,13 @@ import { RateCards } from '@/components/contactability/rate-cards'
 import { ContactabilityCharts } from '@/components/contactability/contactability-charts'
 import { ErrorsChart, type ErrorItem } from '@/components/contactability/errors-chart'
 import { ExportCsvButton } from '@/components/contactability/export-csv-button'
+import { parseFilterValue } from '@/lib/segment-filters'
+
+// Muestra un filtro guardado (uno o varios valores) de forma legible.
+function formatFilterValue(stored: string | null, allLabel: string) {
+  const values = parseFilterValue(stored)
+  return values.length > 0 ? values.join(', ') : allLabel
+}
 
 type ClienteLite = {
   id: string
@@ -105,8 +112,8 @@ export function CampaignDetailView({
             <Field label="Plantilla" value={campaign.template?.nombre ?? '—'} />
             <Field label="Base de Datos" value={campaign.databaseName} />
             <Field label="Modo de Envío" value={campaign.sendMode ?? '—'} />
-            <Field label="Segmento" value={campaign.segmentoFilter ?? 'Todos'} />
-            <Field label="Estrategia" value={campaign.estrategiaFilter ?? 'Todas'} />
+            <Field label="Segmento" value={formatFilterValue(campaign.segmentoFilter, 'Todos')} />
+            <Field label="Estrategia" value={formatFilterValue(campaign.estrategiaFilter, 'Todas')} />
             <Field
               label="Programada para"
               value={
