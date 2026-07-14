@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, startedAt: true },
     })
 
     if (!campaign) {
@@ -53,6 +53,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (campaign.status === 'sending' || campaign.status === 'completed') {
       return NextResponse.json(
         { success: false, error: 'Solo se pueden programar campañas en borrador o ya programadas.' },
+        { status: 409 },
+      )
+    }
+
+    // Ya reclamada por el scheduler: reprogramarla la pondría de nuevo en la
+    // cola (este update resetea startedAt) y se enviaría dos veces.
+    if (campaign.status === 'scheduled' && campaign.startedAt !== null) {
+      return NextResponse.json(
+        { success: false, error: 'El envío de esta campaña ya inició y no se puede reprogramar.' },
         { status: 409 },
       )
     }
@@ -78,8 +87,13 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params
 
+    // `startedAt: null` es lo que hace segura la cancelación: el scheduler
+    // reclama la campaña marcando startedAt y recién después dispara el envío
+    // (con refreshOnSend puede tardar minutos re-consultando BigQuery), pero la
+    // deja en status 'scheduled'. Sin este filtro, cancelar dentro de esa
+    // ventana respondería "cancelada" mientras los mensajes ya van en camino.
     const updated = await prisma.campaign.updateMany({
-      where: { id, status: 'scheduled' },
+      where: { id, status: 'scheduled', startedAt: null },
       data: {
         status: 'draft',
         scheduledAt: null,
@@ -87,9 +101,22 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     })
 
     if (updated.count === 0) {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id },
+        select: { status: true, startedAt: true },
+      })
+
+      const alreadyStarted =
+        campaign?.status === 'scheduled' && campaign.startedAt !== null
+
       return NextResponse.json(
-        { success: false, error: 'No hay una programación activa para cancelar.' },
-        { status: 404 },
+        {
+          success: false,
+          error: alreadyStarted
+            ? 'El envío de esta campaña ya inició y no se puede cancelar.'
+            : 'No hay una programación activa para cancelar.',
+        },
+        { status: alreadyStarted ? 409 : 404 },
       )
     }
 
