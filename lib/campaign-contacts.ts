@@ -47,6 +47,15 @@ function toStringField(value: unknown): string {
   return String(value).trim()
 }
 
+function toNullableInt(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : null
+}
+
 // Campos del cliente existente que miramos para el "fill-only" de Excel.
 type ExistingClienteFields = {
   id: string
@@ -63,6 +72,7 @@ type ExistingClienteFields = {
   monto1: Prisma.Decimal | null
   monto2: Prisma.Decimal | null
   monto3: Prisma.Decimal | null
+  ctaActPag: number | null
   probabilidad: Prisma.Decimal | null
   fechaAsamblea: Date | null
   fechaVencimiento: Date | null
@@ -86,6 +96,7 @@ function buildClienteData(contact: CampaignContact) {
     monto1: contact.monto1 != null ? toDecimal(contact.monto1 as number) : null,
     monto2: contact.monto2 != null ? toDecimal(contact.monto2 as number) : null,
     monto3: contact.monto3 != null ? toDecimal(contact.monto3 as number) : null,
+    ctaActPag: toNullableInt(contact.ctaActPag),
     probabilidad:
       contact.probabilidadPago === null || contact.probabilidadPago === undefined
         ? null
@@ -137,6 +148,7 @@ function buildFillOnlyData(
   if (existing.monto1 === null && fresh.monto1 !== null) fill.monto1 = fresh.monto1
   if (existing.monto2 === null && fresh.monto2 !== null) fill.monto2 = fresh.monto2
   if (existing.monto3 === null && fresh.monto3 !== null) fill.monto3 = fresh.monto3
+  if (existing.ctaActPag === null && fresh.ctaActPag !== null) fill.ctaActPag = fresh.ctaActPag
   if (existing.probabilidad === null && fresh.probabilidad !== null) fill.probabilidad = fresh.probabilidad
 
   return fill
@@ -191,6 +203,7 @@ export async function freezeCampaignContacts(
       monto1: true,
       monto2: true,
       monto3: true,
+      ctaActPag: true,
       probabilidad: true,
       fechaAsamblea: true,
       fechaVencimiento: true,

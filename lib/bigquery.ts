@@ -142,6 +142,17 @@ function toNumber(value: unknown) {
   return 0
 }
 
+// A diferencia de `toNumber`, distingue "sin dato" (null) de "cero", que para
+// un entero de negocio como Cta_Act_Pag son cosas distintas.
+function toNullableInt(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : null
+}
+
 const SPANISH_MONTHS = [
   'enero',
   'febrero',
@@ -353,7 +364,8 @@ export async function queryBigQueryContactsCobranza(
         CAST(fondos.\`Nombres\` AS STRING) AS nombre,
         CAST(fondos.\`Telefono_2\` AS STRING) AS telefono,
         SAFE_CAST(snap.\`C_Adm\` AS NUMERIC) AS c_adm,
-        SAFE_CAST(snap.\`C_Cap\` AS NUMERIC) AS c_cap
+        SAFE_CAST(snap.\`C_Cap\` AS NUMERIC) AS c_cap,
+        SAFE_CAST(snap.\`Cta_Act_Pag\` AS INT64) AS cta_act_pag
       FROM contratos_pendientes c
       LEFT JOIN fondos_dedup fondos
         ON c.contrato = CAST(fondos.\`Codigo_Asociado\` AS STRING)
@@ -373,6 +385,9 @@ export async function queryBigQueryContactsCobranza(
       SUM(IFNULL(2 * (c_adm + c_cap), 0)) AS monto_1,
       SUM(IFNULL(3 * (c_adm + c_cap), 0)) AS monto_2,
       SUM(IFNULL(4 * (c_adm + c_cap), 0)) AS monto_3,
+      -- Un DNI puede tener varios Codigo_Asociado y cada uno su propio
+      -- Cta_Act_Pag; el envío es por persona, así que nos quedamos con el mayor.
+      MAX(cta_act_pag) AS ctaActPag,
       ANY_VALUE(fecha_asamblea) AS fechaAsamblea,
       ANY_VALUE(fecha_vencimiento) AS fechaVencimiento,
       ANY_VALUE(mes) AS mes,
@@ -412,6 +427,7 @@ export async function queryBigQueryContactsCobranza(
       monto1: toNumber(row.monto_1),
       monto2: toNumber(row.monto_2),
       monto3: toNumber(row.monto_3),
+      ctaActPag: toNullableInt(row.ctaActPag),
       fechaAsamblea: toNullableString(row.fechaAsamblea),
       fechaVencimiento: toNullableString(row.fechaVencimiento),
       mes: addOneMonthToMes(toNullableString(row.mes) ?? ''),
@@ -435,6 +451,7 @@ export async function queryBigQueryContactsCobranza(
     { name: 'monto1', type: 'NUMERIC' },
     { name: 'monto2', type: 'NUMERIC' },
     { name: 'monto3', type: 'NUMERIC' },
+    { name: 'ctaActPag', type: 'INTEGER' },
     { name: 'fechaAsamblea', type: 'DATE' },
     { name: 'fechaVencimiento', type: 'DATE' },
     { name: 'mes', type: 'STRING' },
@@ -496,6 +513,11 @@ export async function queryBigQueryContacts(
       WHERE fecha_inicio_ciclo > (SELECT fecha_fin_ciclo FROM ciclo_activo)
       QUALIFY ROW_NUMBER() OVER (ORDER BY fecha_inicio_ciclo ASC) = 1
     ),
+    snap_dedup AS (
+      SELECT *
+      FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.BDfondos_snapshots\`
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY CAST(\`Codigo_Asociado\` AS STRING) ORDER BY 1) = 1
+    ),
     contratos_pendientes AS (
       SELECT
         CAST(src.\`Contrato\` AS STRING) AS contrato,
@@ -527,10 +549,13 @@ export async function queryBigQueryContacts(
       SELECT
         c.*,
         CAST(fondos.\`Nombres\` AS STRING) AS nombre,
-        CAST(fondos.\`Telefono_2\` AS STRING) AS telefono
+        CAST(fondos.\`Telefono_2\` AS STRING) AS telefono,
+        SAFE_CAST(snap.\`Cta_Act_Pag\` AS INT64) AS cta_act_pag
       FROM contratos_pendientes c
       LEFT JOIN \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.DB_BDfondos_actual\` fondos
         ON c.contrato = CAST(fondos.\`Codigo_Asociado\` AS STRING)
+      LEFT JOIN snap_dedup snap
+        ON c.contrato = CAST(snap.\`Codigo_Asociado\` AS STRING)
     )
     SELECT
       STRING_AGG(contrato, ', ' ORDER BY IFNULL(cuota, 0) DESC) AS codigoAsociado,
@@ -542,6 +567,9 @@ export async function queryBigQueryContacts(
       ANY_VALUE(nombre HAVING MAX IFNULL(cuota, 0)) AS nombre,
       ANY_VALUE(telefono HAVING MAX IFNULL(cuota, 0)) AS telefono,
       SUM(IFNULL(cuota, 0)) AS monto,
+      -- Un DNI puede tener varios Codigo_Asociado y cada uno su propio
+      -- Cta_Act_Pag; el envío es por persona, así que nos quedamos con el mayor.
+      MAX(cta_act_pag) AS ctaActPag,
       ANY_VALUE(fecha_asamblea HAVING MAX IFNULL(cuota, 0)) AS fechaAsamblea,
       ANY_VALUE(fecha_vencimiento HAVING MAX IFNULL(cuota, 0)) AS fechaVencimiento,
       ANY_VALUE(mes HAVING MAX IFNULL(cuota, 0)) AS mes,
@@ -576,6 +604,7 @@ export async function queryBigQueryContacts(
       nombre: toStringValue(row.nombre),
       telefono,
       monto: toNumber(row.monto),
+      ctaActPag: toNullableInt(row.ctaActPag),
       fechaAsamblea: toNullableString(row.fechaAsamblea),
       fechaVencimiento: toNullableString(row.fechaVencimiento),
       mes: addOneMonthToMes(toNullableString(row.mes) ?? ''),
@@ -594,6 +623,7 @@ export async function queryBigQueryContacts(
     { name: 'nombre', type: 'STRING' },
     { name: 'telefono', type: 'STRING' },
     { name: 'monto', type: 'NUMERIC' },
+    { name: 'ctaActPag', type: 'INTEGER' },
     { name: 'fechaAsamblea', type: 'DATE' },
     { name: 'fechaVencimiento', type: 'DATE' },
     { name: 'mes', type: 'STRING' },

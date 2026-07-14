@@ -654,6 +654,7 @@ export function CampaignForm() {
                       <TableHead>Nombre</TableHead>
                       <TableHead>Telefono</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
+                      {source === 'bigquery' && <TableHead className="text-right">Cta Act Pag</TableHead>}
                       {activeGestionType === 'gestion_cobranza' && (
                         <>
                           <TableHead className="text-right">Monto 1</TableHead>
@@ -691,6 +692,11 @@ export function CampaignForm() {
                             maximumFractionDigits: 0,
                           })}
                         </TableCell>
+                        {source === 'bigquery' && (
+                          <TableCell className="text-right">
+                            {contact.ctaActPag ?? '-'}
+                          </TableCell>
+                        )}
                         {activeGestionType === 'gestion_cobranza' && (
                           <>
                             <TableCell className="text-right">

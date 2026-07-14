@@ -29,6 +29,7 @@ export interface CampaignContact {
   monto1?: number | null
   monto2?: number | null
   monto3?: number | null
+  ctaActPag?: number | null
   fechaAsamblea?: string | Date | null
   fechaVencimiento?: string | Date | null
   mes?: string
