@@ -17,6 +17,28 @@ export default async function CampaignsPage() {
     orderBy: { createdAt: 'desc' },
   })
 
+  // Desglose de envíos por campaña (enviados vs fallidos) para el indicador
+  // rápido de la lista: así se ve de un vistazo si una campaña falló en masa.
+  const statusRows = await prisma.campaignContact.groupBy({
+    by: ['campaignId', 'sendStatus'],
+    _count: { _all: true },
+  })
+  const sendStats = new Map<string, { enviados: number; fallidos: number }>()
+  for (const row of statusRows) {
+    const entry = sendStats.get(row.campaignId) ?? { enviados: 0, fallidos: 0 }
+    if (['sent', 'delivered', 'read'].includes(row.sendStatus)) {
+      entry.enviados += row._count._all
+    } else if (row.sendStatus === 'failed') {
+      entry.fallidos += row._count._all
+    }
+    sendStats.set(row.campaignId, entry)
+  }
+  const campaignsWithStats = campaigns.map((c) => ({
+    ...c,
+    enviados: sendStats.get(c.id)?.enviados ?? 0,
+    fallidos: sendStats.get(c.id)?.fallidos ?? 0,
+  }))
+
   return (
     <AppLayout>
       <div className="p-8">
@@ -35,7 +57,7 @@ export default async function CampaignsPage() {
           </Link>
         </div>
 
-        <CampaignsList campaigns={campaigns} />
+        <CampaignsList campaigns={campaignsWithStats} />
       </div>
     </AppLayout>
   )

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Eye, Loader2, Trash2 } from 'lucide-react'
+import { Eye, Loader2, Trash2, Check, X, AlertTriangle } from 'lucide-react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,8 @@ type CampaignRow = {
   createdAt: Date | string
   template: { nombre: string } | null
   _count?: { campaignContacts: number }
+  enviados?: number
+  fallidos?: number
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -89,6 +91,7 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
                 <TableHead>Fecha Creación</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Contactos</TableHead>
+                <TableHead className="text-center">Envíos</TableHead>
                 <TableHead className="text-center">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -105,6 +108,45 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
                   </TableCell>
                   <TableCell className="text-right">
                     {campaign._count?.campaignContacts ?? campaign.totalContacts}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {(() => {
+                      const enviados = campaign.enviados ?? 0
+                      const fallidos = campaign.fallidos ?? 0
+                      const procesados = enviados + fallidos
+                      if (procesados === 0) {
+                        return <span className="text-muted-foreground text-sm">—</span>
+                      }
+                      const failRate = fallidos / procesados
+                      const grave = failRate >= 0.5
+                      return (
+                        <div
+                          className="flex items-center justify-center gap-3 text-sm"
+                          title={`${enviados} enviados · ${fallidos} fallidos`}
+                        >
+                          <span className="flex items-center gap-1 font-medium text-green-600 dark:text-green-500 tabular-nums">
+                            <Check className="w-3.5 h-3.5" />
+                            {enviados}
+                          </span>
+                          <span
+                            className={`flex items-center gap-1 font-medium tabular-nums ${
+                              fallidos > 0 ? 'text-red-600 dark:text-red-500' : 'text-muted-foreground'
+                            }`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            {fallidos}
+                          </span>
+                          {grave && (
+                            <span
+                              className="flex items-center gap-1 text-red-600 dark:text-red-500 font-semibold"
+                              title={`${Math.round(failRate * 100)}% falló — revisar`}
+                            >
+                              <AlertTriangle className="w-4 h-4" />
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
