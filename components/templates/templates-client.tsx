@@ -2,11 +2,12 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, RefreshCw, Trash2, Loader2, Upload, ImageIcon } from 'lucide-react'
+import { Plus, RefreshCw, Trash2, Loader2, Upload, ImageIcon, Search } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { CreateTemplateDialog } from './create-template-dialog'
 
 type TemplateRow = {
@@ -51,8 +52,19 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
     null,
   )
   const [uploadingId, setUploadingId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const pendingUploadIdRef = useRef<string | null>(null)
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredTemplates = normalizedQuery
+    ? initialTemplates.filter(
+        (t) =>
+          t.nombre.toLowerCase().includes(normalizedQuery) ||
+          (t.descripcion ?? '').toLowerCase().includes(normalizedQuery) ||
+          (t.categoria ?? '').toLowerCase().includes(normalizedQuery),
+      )
+    : initialTemplates
 
   const handleOpenUpload = (templateId: string) => {
     pendingUploadIdRef.current = templateId
@@ -190,15 +202,34 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
         </div>
       )}
 
+      {initialTemplates.length > 0 && (
+        <div className="relative max-w-sm mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar plantilla..."
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {initialTemplates.length === 0 ? (
         <div className="border border-dashed border-border rounded-lg p-12 text-center">
           <p className="text-muted-foreground mb-4">
             No hay plantillas todavía. Sincroniza con Meta o crea una nueva.
           </p>
         </div>
+      ) : filteredTemplates.length === 0 ? (
+        <div className="border border-dashed border-border rounded-lg p-12 text-center">
+          <p className="text-muted-foreground">
+            No se encontraron plantillas para “{query}”.
+          </p>
+        </div>
       ) : (
         <div className="space-y-4">
-          {initialTemplates.map((t) => (
+          {filteredTemplates.map((t) => (
             <Card
               key={t.id}
               className={`hover:shadow-md transition-shadow ${

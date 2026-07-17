@@ -3,11 +3,23 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Eye, Loader2, Trash2, Check, X, AlertTriangle, MoreHorizontal } from 'lucide-react'
+import {
+  Eye,
+  Loader2,
+  Trash2,
+  Check,
+  X,
+  AlertTriangle,
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+} from 'lucide-react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,10 +57,28 @@ const STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default' | 'dest
   failed: 'destructive',
 }
 
+const PAGE_SIZE = 20
+
 export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
   const router = useRouter()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [query, setQuery] = useState('')
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const filtered = normalizedQuery
+    ? campaigns.filter(
+        (c) =>
+          c.nombre.toLowerCase().includes(normalizedQuery) ||
+          (c.template?.nombre ?? '').toLowerCase().includes(normalizedQuery),
+      )
+    : campaigns
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const startIndex = (currentPage - 1) * PAGE_SIZE
+  const pageItems = filtered.slice(startIndex, startIndex + PAGE_SIZE)
 
   const handleDelete = async (campaign: CampaignRow) => {
     const warning =
@@ -88,9 +118,23 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
     <div className="space-y-2">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setPage(1)
+          }}
+          placeholder="Buscar por campaña o plantilla..."
+          className="pl-9"
+        />
+      </div>
+
       <div className="border border-border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
+        <div>
+          <Table className="w-full [&_th]:px-5 [&_td]:px-5">
             <TableHeader>
               <TableRow className="bg-muted">
                 <TableHead>Nombre</TableHead>
@@ -103,10 +147,19 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {campaigns.map((campaign) => (
+              {pageItems.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    No se encontraron campañas para “{query}”.
+                  </TableCell>
+                </TableRow>
+              )}
+              {pageItems.map((campaign) => (
                 <TableRow key={campaign.id} className="hover:bg-muted/50">
                   <TableCell className="font-medium">{campaign.nombre}</TableCell>
-                  <TableCell>{campaign.template?.nombre ?? 'Sin plantilla'}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {campaign.template?.nombre ?? 'Sin plantilla'}
+                  </TableCell>
                   <TableCell>{new Date(campaign.createdAt).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[campaign.status] ?? 'secondary'}>
@@ -194,6 +247,40 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
           </Table>
         </div>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-sm text-muted-foreground">
+            Mostrando {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} de{' '}
+            {filtered.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Anterior
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Página {currentPage} de {totalPages}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Siguiente
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
