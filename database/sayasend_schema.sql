@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS sayasend.clientes (
     monto_1 NUMERIC(12, 2),
     monto_2 NUMERIC(12, 2),
     monto_3 NUMERIC(12, 2),
+    cta_act_pag INTEGER,
     probabilidad NUMERIC(5, 2),
     segmento VARCHAR(50),
     estrategia VARCHAR(50),
