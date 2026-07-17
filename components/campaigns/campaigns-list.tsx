@@ -3,11 +3,18 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Eye, Loader2, Trash2, Check, X, AlertTriangle } from 'lucide-react'
+import { Eye, Loader2, Trash2, Check, X, AlertTriangle, MoreHorizontal } from 'lucide-react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { deleteCampaign } from '@/lib/api'
 
 type CampaignRow = {
@@ -149,27 +156,36 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
                     })()}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center justify-center gap-1">
-                      <Link href={`/campaigns/${campaign.id}`}>
-                        <Button size="sm" variant="ghost" className="gap-2">
-                          <Eye className="w-4 h-4" />
-                          Ver
-                        </Button>
-                      </Link>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="gap-2 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(campaign)}
-                        disabled={campaign.status === 'sending' || deletingId === campaign.id}
-                      >
-                        {deletingId === campaign.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                        Borrar
-                      </Button>
+                    <div className="flex items-center justify-center">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8">
+                            {deletingId === campaign.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <MoreHorizontal className="w-4 h-4" />
+                            )}
+                            <span className="sr-only">Acciones</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/campaigns/${campaign.id}`}>
+                              <Eye className="w-4 h-4" />
+                              Ver
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => handleDelete(campaign)}
+                            disabled={campaign.status === 'sending' || deletingId === campaign.id}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Borrar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
