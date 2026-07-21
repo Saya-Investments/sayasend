@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, ChevronsUpDown } from 'lucide-react'
 
 import {
   createCampaign,
@@ -48,9 +49,18 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MultiSelect } from '@/components/ui/multi-select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
@@ -109,6 +119,14 @@ export function CampaignForm() {
   const [successMessage, setSuccessMessage] = useState('')
   const [templates, setTemplates] = useState<TemplateOption[]>([])
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true)
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false)
+
+  // Cambiar de plantilla invalida el mapeo: los {{n}} son de la anterior.
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplate(templateId)
+    setVariableMappings({})
+    setIsTemplatePickerOpen(false)
+  }
 
   const currentTemplate = templates.find((template) => template.id === selectedTemplate)
   const currentVariables = useMemo(
@@ -777,35 +795,90 @@ export function CampaignForm() {
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="template">Seleccionar Plantilla</Label>
-              <Select
-                value={selectedTemplate || 'none'}
-                onValueChange={(value) => {
-                  setSelectedTemplate(value === 'none' ? '' : value)
-                  setVariableMappings({})
-                }}
-                disabled={isLoadingTemplates}
-              >
-                <SelectTrigger id="template" className="w-full">
-                  <SelectValue
-                    placeholder={
-                      isLoadingTemplates
-                        ? 'Cargando plantillas...'
-                        : templates.length === 0
-                          ? 'No hay plantillas — sincroniza con Meta primero'
-                          : 'Selecciona una plantilla'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin plantilla</SelectItem>
-                  {templates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.nombre}
-                      {template.idioma ? ` (${template.idioma})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Combobox en vez de Select: la lista de plantillas crece con cada
+                  sync de Meta y hace falta buscar por nombre. */}
+              <Popover open={isTemplatePickerOpen} onOpenChange={setIsTemplatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="template"
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={isTemplatePickerOpen}
+                    disabled={isLoadingTemplates}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className={currentTemplate ? 'truncate' : 'truncate text-muted-foreground'}>
+                      {currentTemplate
+                        ? `${currentTemplate.nombre}${currentTemplate.idioma ? ` (${currentTemplate.idioma})` : ''}`
+                        : isLoadingTemplates
+                          ? 'Cargando plantillas...'
+                          : templates.length === 0
+                            ? 'No hay plantillas — sincroniza con Meta primero'
+                            : 'Selecciona una plantilla'}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                >
+                  {/* El filtro por defecto de cmdk es difuso: acepta las letras
+                      salteadas, así que "adm_a" matchea "adm_mundial_alta".
+                      Los nombres de plantilla son códigos, no prosa, así que
+                      buscamos por subcadena. Varias palabras separadas por
+                      espacio se exigen todas ("adm alta"), lo que permite
+                      filtrar sin acordarse del nombre completo. */}
+                  <Command
+                    filter={(value, search) => {
+                      const nombre = value.toLowerCase()
+                      const termino = search.trim().toLowerCase()
+                      if (!termino) return 1
+                      if (nombre.startsWith(termino)) return 3
+                      if (nombre.includes(termino)) return 2
+                      const palabras = termino.split(/\s+/)
+                      return palabras.length > 1 && palabras.every((p) => nombre.includes(p))
+                        ? 1
+                        : 0
+                    }}
+                  >
+                    <CommandInput placeholder="Buscar plantilla..." />
+                    <CommandList>
+                      <CommandEmpty>No se encontraron plantillas.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="Sin plantilla"
+                          onSelect={() => handleSelectTemplate('')}
+                        >
+                          <Check
+                            className={`mr-2 h-4 w-4 ${selectedTemplate ? 'opacity-0' : 'opacity-100'}`}
+                          />
+                          Sin plantilla
+                        </CommandItem>
+                        {templates.map((template) => (
+                          <CommandItem
+                            key={template.id}
+                            // cmdk filtra por este `value`, no por el id.
+                            value={`${template.nombre} ${template.idioma ?? ''}`}
+                            onSelect={() => handleSelectTemplate(template.id)}
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${
+                                selectedTemplate === template.id ? 'opacity-100' : 'opacity-0'
+                              }`}
+                            />
+                            <span className="truncate">
+                              {template.nombre}
+                              {template.idioma ? ` (${template.idioma})` : ''}
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {currentTemplate && (

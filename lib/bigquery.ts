@@ -323,10 +323,16 @@ export async function queryBigQueryContactsCobranza(
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.DB_BDfondos_actual\`
       QUALIFY ROW_NUMBER() OVER (PARTITION BY CAST(\`Codigo_Asociado\` AS STRING) ORDER BY 1) = 1
     ),
+    -- La tabla guarda un snapshot por día y por asociado: nos quedamos con el
+    -- más reciente. Ordenar por constante dejaba la fila al azar y los
+    -- snapshots anteriores a mayo 2026 traen \`Cta_Act_Pag\` en NULL.
     snap_dedup AS (
       SELECT *
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.BDfondos_snapshots\`
-      QUALIFY ROW_NUMBER() OVER (PARTITION BY CAST(\`Codigo_Asociado\` AS STRING) ORDER BY 1) = 1
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY CAST(\`Codigo_Asociado\` AS STRING)
+        ORDER BY \`fecha_snapshot\` DESC
+      ) = 1
     ),
     contratos_pendientes AS (
       SELECT
@@ -513,10 +519,16 @@ export async function queryBigQueryContacts(
       WHERE fecha_inicio_ciclo > (SELECT fecha_fin_ciclo FROM ciclo_activo)
       QUALIFY ROW_NUMBER() OVER (ORDER BY fecha_inicio_ciclo ASC) = 1
     ),
+    -- La tabla guarda un snapshot por día y por asociado: nos quedamos con el
+    -- más reciente. Ordenar por constante dejaba la fila al azar y los
+    -- snapshots anteriores a mayo 2026 traen \`Cta_Act_Pag\` en NULL.
     snap_dedup AS (
       SELECT *
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.BDfondos_snapshots\`
-      QUALIFY ROW_NUMBER() OVER (PARTITION BY CAST(\`Codigo_Asociado\` AS STRING) ORDER BY 1) = 1
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY CAST(\`Codigo_Asociado\` AS STRING)
+        ORDER BY \`fecha_snapshot\` DESC
+      ) = 1
     ),
     contratos_pendientes AS (
       SELECT
