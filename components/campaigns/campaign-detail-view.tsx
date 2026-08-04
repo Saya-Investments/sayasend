@@ -1,8 +1,19 @@
 'use client'
 
+import { useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { SendCampaignButton } from './send-campaign-button'
 import { MetricsCards } from '@/components/contactability/metrics-cards'
 import { RateCards } from '@/components/contactability/rate-cards'
@@ -76,6 +87,8 @@ const CONTACT_STATUS_LABEL: Record<string, string> = {
   failed: 'Fallido',
 }
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100]
+
 const CONTACT_STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default' | 'destructive'> = {
   pending: 'secondary',
   sent: 'outline',
@@ -93,6 +106,15 @@ export function CampaignDetailView({
   metrics: Metrics | null
   errors: ErrorItem[]
 }) {
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0])
+
+  const contacts = campaign.campaignContacts
+  const totalPages = Math.max(1, Math.ceil(contacts.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const startIndex = (currentPage - 1) * pageSize
+  const pageItems = contacts.slice(startIndex, startIndex + pageSize)
+
   return (
     <div className="space-y-8">
       <div className="flex justify-end">
@@ -145,12 +167,13 @@ export function CampaignDetailView({
 
       <Card>
         <CardHeader>
-          <CardTitle>Contactos ({campaign.campaignContacts.length})</CardTitle>
+          <CardTitle>Contactos ({contacts.length})</CardTitle>
         </CardHeader>
-        <CardContent>
-          {campaign.campaignContacts.length === 0 ? (
+        <CardContent className="space-y-4">
+          {contacts.length === 0 ? (
             <p className="text-muted-foreground">Sin contactos.</p>
           ) : (
+            <>
             <div className="border border-border rounded-lg overflow-hidden overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -164,7 +187,7 @@ export function CampaignDetailView({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {campaign.campaignContacts.map((c) => {
+                  {pageItems.map((c) => {
                     const lastEvent = c.readAt ?? c.deliveredAt ?? c.sentAt ?? c.failedAt
                     return (
                       <TableRow key={c.id} className="hover:bg-muted/50">
@@ -194,6 +217,61 @@ export function CampaignDetailView({
                 </TableBody>
               </Table>
             </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Filas por página</span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value))
+                    setPage(1)
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[80px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <SelectItem key={size} value={String(size)}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {startIndex + 1}–{Math.min(startIndex + pageSize, contacts.length)} de{' '}
+                  {contacts.length}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={() => setPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Anterior
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Página {currentPage} de {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+            </>
           )}
         </CardContent>
       </Card>
