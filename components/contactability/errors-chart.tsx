@@ -46,7 +46,7 @@ export function ErrorsChart({ errors }: ErrorsChartProps) {
             <XAxis type="number" allowDecimals={false} />
             <YAxis type="category" dataKey="code" width={80} />
             <Tooltip
-              formatter={(value: number) => [value, 'Ocurrencias']}
+              formatter={(value: number) => [value, 'Contactos']}
               labelFormatter={(label) => `Código ${label} — ${getWhatsAppErrorDescription(label)}`}
             />
             <Bar dataKey="count" fill="#E74C3C" radius={[0, 4, 4, 0]} />
@@ -72,7 +72,9 @@ export function ErrorsChart({ errors }: ErrorsChartProps) {
         </div>
 
         <p className="text-xs text-muted-foreground mt-4 italic">
-          Los códigos de error más frecuentes pueden indicar problemas sistemáticos
+          Cada barra cuenta contactos únicos afectados, no eventos. Un mismo contacto puede
+          aparecer en más de un código, por lo que la suma de las barras puede superar el total
+          de fallidos.
         </p>
       </CardContent>
     </Card>

@@ -107,7 +107,7 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
     const errorRows = await prisma.$queryRaw<Array<{ code: string; count: bigint }>>`
       SELECT
         (err->>'code')::text AS code,
-        COUNT(*)::bigint AS count
+        COUNT(DISTINCT COALESCE(mo.campaign_contact_id::text, mo.phone_to))::bigint AS count
       FROM sayasend.mensaje_status_event mse
       JOIN sayasend.mensaje_out mo ON mse.id_msg = mo.id_msg
       CROSS JOIN LATERAL jsonb_array_elements(mse.errors_json) AS err
