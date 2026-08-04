@@ -1,18 +1,20 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Download, Loader2 } from 'lucide-react'
+import { Check, ChevronsUpDown, Download, Loader2 } from 'lucide-react'
 
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 type Campaign = {
   id: string
@@ -36,7 +38,9 @@ export function ChatFilters({
   onOnlyRepliedChange,
 }: Props) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [campaignPickerOpen, setCampaignPickerOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const selectedCampaign = campaigns.find((campaign) => campaign.id === campaignId)
 
   useEffect(() => {
     ;(async () => {
@@ -78,22 +82,78 @@ export function ChatFilters({
   return (
     <div className="border-b border-border p-3 space-y-2 bg-card">
       <div className="flex gap-2 items-center">
-        <Select value={campaignId} onValueChange={onCampaignChange}>
-          <SelectTrigger className="h-9 text-sm flex-1">
-            <SelectValue placeholder="Todas las campañas" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las campañas</SelectItem>
-            {campaigns.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                <span className="truncate">{c.nombre}</span>
-                <span className="text-xs text-muted-foreground ml-2">
-                  · {c.totalContacts}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={campaignPickerOpen} onOpenChange={setCampaignPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={campaignPickerOpen}
+              aria-label="Filtrar por campaña"
+              className="h-9 min-w-0 flex-1 justify-between px-3 font-normal"
+            >
+              <span className="truncate">
+                {selectedCampaign?.nombre ?? 'Todas las campañas'}
+              </span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="w-[var(--radix-popover-trigger-width)] p-0"
+          >
+            <Command
+              filter={(value, search) => {
+                const campaign = value.toLowerCase()
+                const term = search.trim().toLowerCase()
+                if (!term) return 1
+                if (campaign.startsWith(term)) return 3
+                return campaign.includes(term) ? 2 : 0
+              }}
+            >
+              <CommandInput placeholder="Buscar campaña..." />
+              <CommandList>
+                <CommandEmpty>No se encontraron campañas.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    value="Todas las campañas"
+                    onSelect={() => {
+                      onCampaignChange('all')
+                      setCampaignPickerOpen(false)
+                    }}
+                  >
+                    <Check
+                      className={`mr-2 h-4 w-4 ${
+                        campaignId === 'all' ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    />
+                    Todas las campañas
+                  </CommandItem>
+                  {campaigns.map((campaign) => (
+                    <CommandItem
+                      key={campaign.id}
+                      value={`${campaign.nombre} ${campaign.id}`}
+                      onSelect={() => {
+                        onCampaignChange(campaign.id)
+                        setCampaignPickerOpen(false)
+                      }}
+                    >
+                      <Check
+                        className={`mr-2 h-4 w-4 ${
+                          campaignId === campaign.id ? 'opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{campaign.nombre}</span>
+                      <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                        · {campaign.totalContacts}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         <Button
           variant="outline"
