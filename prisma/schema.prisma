@@ -30,6 +30,7 @@ model Cliente {
   monto2                 Decimal?          @map("monto_2") @db.Decimal(12, 2)
   monto3                 Decimal?          @map("monto_3") @db.Decimal(12, 2)
   ctaActPag              Int?              @map("cta_act_pag")
+  telefono3              String?           @map("telefono_3") @db.VarChar(20)
   campaignContacts       CampaignContact[]
   chatMessages           ChatMessage[]
 

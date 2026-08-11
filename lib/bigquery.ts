@@ -369,6 +369,7 @@ export async function queryBigQueryContactsCobranza(
         c.*,
         CAST(fondos.\`Nombres\` AS STRING) AS nombre,
         CAST(fondos.\`Telefono_2\` AS STRING) AS telefono,
+        NULLIF(TRIM(CAST(fondos.\`Telefono_3\` AS STRING)), '') AS telefono3,
         SAFE_CAST(snap.\`C_Adm\` AS NUMERIC) AS c_adm,
         SAFE_CAST(snap.\`C_Cap\` AS NUMERIC) AS c_cap,
         SAFE_CAST(snap.\`Cta_Act_Pag\` AS INT64) AS cta_act_pag
@@ -387,6 +388,9 @@ export async function queryBigQueryContactsCobranza(
       ANY_VALUE(frente) AS frente,
       ANY_VALUE(nombre) AS nombre,
       ANY_VALUE(telefono) AS telefono,
+      -- Telefono_3 casi siempre viene vacío: nos quedamos con el primero de los
+      -- contratos del DNI que sí lo tenga (los NULL se ignoran en ANY_VALUE).
+      ANY_VALUE(telefono3) AS telefono3,
       SUM(IFNULL(c_adm + c_cap, 0)) AS monto,
       SUM(IFNULL(2 * (c_adm + c_cap), 0)) AS monto_1,
       SUM(IFNULL(3 * (c_adm + c_cap), 0)) AS monto_2,
@@ -429,6 +433,7 @@ export async function queryBigQueryContactsCobranza(
       frente: toNullableString(row.frente),
       nombre: toStringValue(row.nombre),
       telefono,
+      telefono3: toNullableString(row.telefono3),
       monto: toNumber(row.monto),
       monto1: toNumber(row.monto_1),
       monto2: toNumber(row.monto_2),
@@ -453,6 +458,7 @@ export async function queryBigQueryContactsCobranza(
     { name: 'frente', type: 'STRING' },
     { name: 'nombre', type: 'STRING' },
     { name: 'telefono', type: 'STRING' },
+    { name: 'telefono3', type: 'STRING' },
     { name: 'monto', type: 'NUMERIC' },
     { name: 'monto1', type: 'NUMERIC' },
     { name: 'monto2', type: 'NUMERIC' },
@@ -562,6 +568,7 @@ export async function queryBigQueryContacts(
         c.*,
         CAST(fondos.\`Nombres\` AS STRING) AS nombre,
         CAST(fondos.\`Telefono_2\` AS STRING) AS telefono,
+        NULLIF(TRIM(CAST(fondos.\`Telefono_3\` AS STRING)), '') AS telefono3,
         SAFE_CAST(snap.\`Cta_Act_Pag\` AS INT64) AS cta_act_pag
       FROM contratos_pendientes c
       LEFT JOIN \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.DB_BDfondos_actual\` fondos
@@ -578,6 +585,9 @@ export async function queryBigQueryContacts(
       ANY_VALUE(frente HAVING MAX IFNULL(cuota, 0)) AS frente,
       ANY_VALUE(nombre HAVING MAX IFNULL(cuota, 0)) AS nombre,
       ANY_VALUE(telefono HAVING MAX IFNULL(cuota, 0)) AS telefono,
+      -- Telefono_3 casi siempre viene vacío: en vez de atarlo al contrato de
+      -- mayor cuota, tomamos el primero de los contratos del DNI que lo tenga.
+      ANY_VALUE(telefono3) AS telefono3,
       SUM(IFNULL(cuota, 0)) AS monto,
       -- Un DNI puede tener varios Codigo_Asociado y cada uno su propio
       -- Cta_Act_Pag; el envío es por persona, así que nos quedamos con el mayor.
@@ -615,6 +625,7 @@ export async function queryBigQueryContacts(
       frente: toNullableString(row.frente),
       nombre: toStringValue(row.nombre),
       telefono,
+      telefono3: toNullableString(row.telefono3),
       monto: toNumber(row.monto),
       ctaActPag: toNullableInt(row.ctaActPag),
       fechaAsamblea: toNullableString(row.fechaAsamblea),
@@ -634,6 +645,7 @@ export async function queryBigQueryContacts(
     { name: 'frente', type: 'STRING' },
     { name: 'nombre', type: 'STRING' },
     { name: 'telefono', type: 'STRING' },
+    { name: 'telefono3', type: 'STRING' },
     { name: 'monto', type: 'NUMERIC' },
     { name: 'ctaActPag', type: 'INTEGER' },
     { name: 'fechaAsamblea', type: 'DATE' },

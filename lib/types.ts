@@ -25,6 +25,7 @@ export interface CampaignContact {
   frente?: string | null
   nombre: string
   telefono: string
+  telefono3?: string | null
   monto: number
   monto1?: number | null
   monto2?: number | null

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS sayasend.clientes (
     codigo_asociado VARCHAR(50) NOT NULL,
     dni VARCHAR(20) NOT NULL,
     telefono VARCHAR(20) NOT NULL,
+    telefono_3 VARCHAR(20),
     nombre VARCHAR(150) NOT NULL,
     monto NUMERIC(12, 2) NOT NULL DEFAULT 0,
     monto_1 NUMERIC(12, 2),

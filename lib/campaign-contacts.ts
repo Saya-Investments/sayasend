@@ -63,6 +63,7 @@ type ExistingClienteFields = {
   codigoAsociado: string
   nombre: string | null
   telefono: string | null
+  telefono3: string | null
   segmento: string | null
   estrategia: string | null
   frente: string | null
@@ -91,6 +92,9 @@ function buildClienteData(contact: CampaignContact) {
     codigoAsociado: toStringField(contact.codigoAsociado),
     dni: toStringField(contact.numDoc),
     telefono: toStringField(contact.telefono),
+    // Telefono_3 es opcional en DB_BDfondos_actual: se guarda null si no viene,
+    // en vez de '' como `telefono`, que es NOT NULL.
+    telefono3: toStringField(contact.telefono3) || null,
     nombre: contact.nombre || '',
     monto: toDecimal(contact.monto),
     monto1: contact.monto1 != null ? toDecimal(contact.monto1 as number) : null,
@@ -130,6 +134,7 @@ function buildFillOnlyData(
   // Strings: rellenar si la BD está vacía y el Excel trae algo.
   if (isBlankStr(existing.nombre) && !isBlankStr(fresh.nombre)) fill.nombre = String(fresh.nombre).trim()
   if (isBlankStr(existing.telefono) && !isBlankStr(fresh.telefono)) fill.telefono = String(fresh.telefono).trim()
+  if (isBlankStr(existing.telefono3) && !isBlankStr(fresh.telefono3)) fill.telefono3 = String(fresh.telefono3).trim()
   if (isBlankStr(existing.segmento) && !isBlankStr(fresh.segmento)) fill.segmento = String(fresh.segmento).trim()
   if (isBlankStr(existing.estrategia) && !isBlankStr(fresh.estrategia)) fill.estrategia = String(fresh.estrategia).trim()
   if (isBlankStr(existing.frente) && !isBlankStr(fresh.frente)) fill.frente = String(fresh.frente).trim()
@@ -194,6 +199,7 @@ export async function freezeCampaignContacts(
       codigoAsociado: true,
       nombre: true,
       telefono: true,
+      telefono3: true,
       segmento: true,
       estrategia: true,
       frente: true,
