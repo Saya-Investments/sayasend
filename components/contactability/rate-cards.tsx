@@ -8,23 +8,26 @@ interface RateCardsProps {
 }
 
 export function RateCards({ metrics }: RateCardsProps) {
+  // Las tres se calculan sobre el total, así que no son excluyentes entre sí:
+  // los leídos ya están contados dentro de los entregados. La descripción deja
+  // explícito el numerador para que no se lean como partes de un mismo 100%.
   const rates = [
     {
       title: 'Tasa de Entrega',
       value: metrics.deliveryRate.toFixed(1),
-      description: 'Mensajes entregados exitosamente',
+      description: `${metrics.delivered} de ${metrics.total} mensajes llegaron al destinatario (incluye los leídos)`,
       color: 'text-green-600',
     },
     {
       title: 'Tasa de Lectura',
       value: metrics.readRate.toFixed(1),
-      description: 'Mensajes leídos por los destinatarios',
+      description: `${metrics.read} de ${metrics.total} mensajes fueron leídos`,
       color: 'text-purple-600',
     },
     {
       title: 'Tasa de Fallo',
       value: metrics.failureRate.toFixed(1),
-      description: 'Mensajes que fallaron al enviarse',
+      description: `${metrics.failed} de ${metrics.total} mensajes fallaron al enviarse`,
       color: 'text-red-600',
     },
   ]

@@ -134,10 +134,13 @@ export const mockCampaigns: Campaign[] = [
 export const mockMetrics: ContactabilityMetrics = {
   total: 351,
   sent: 351,
-  delivered: 45,
+  delivered: 242,
   read: 197,
   failed: 95,
-  deliveryRate: 12.8,
+  sentOnly: 14,
+  deliveredOnly: 45,
+  pending: 0,
+  deliveryRate: 68.9,
   readRate: 56.1,
   failureRate: 27.1,
 }

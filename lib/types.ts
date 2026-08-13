@@ -61,10 +61,17 @@ export interface Campaign {
 
 export interface ContactabilityMetrics {
   total: number
+  // Acumulados (un leído también cuenta como entregado y enviado). Sirven para
+  // el funnel y las tasas, pero se solapan entre sí.
   sent: number
   delivered: number
   read: number
   failed: number
+  // Excluyentes: cada contacto cae en un solo balde y
+  // sentOnly + deliveredOnly + read + failed + pending = total.
+  sentOnly: number
+  deliveredOnly: number
+  pending: number
   deliveryRate: number
   readRate: number
   failureRate: number

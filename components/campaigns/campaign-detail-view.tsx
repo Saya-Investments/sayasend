@@ -21,6 +21,7 @@ import { ContactabilityCharts } from '@/components/contactability/contactability
 import { ErrorsChart, type ErrorItem } from '@/components/contactability/errors-chart'
 import { ExportCsvButton } from '@/components/contactability/export-csv-button'
 import { parseFilterValue } from '@/lib/segment-filters'
+import type { ContactabilityMetrics } from '@/lib/types'
 
 // Muestra un filtro guardado (uno o varios valores) de forma legible.
 function formatFilterValue(stored: string | null, allLabel: string) {
@@ -60,16 +61,7 @@ type CampaignDetail = {
   campaignContacts: CampaignContactLite[]
 }
 
-type Metrics = {
-  total: number
-  sent: number
-  delivered: number
-  read: number
-  failed: number
-  deliveryRate: number
-  readRate: number
-  failureRate: number
-}
+type Metrics = ContactabilityMetrics
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Borrador',

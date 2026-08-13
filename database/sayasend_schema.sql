@@ -126,7 +126,18 @@ SELECT
         100.0 * COUNT(*) FILTER (WHERE cc.send_status = 'failed')
         / NULLIF(COUNT(cc.id), 0),
         2
-    ) AS failure_rate
+    ) AS failure_rate,
+    -- Baldes excluyentes: cada contacto cuenta en uno solo y los cinco
+    -- (sent_only + delivered_only + read + failed + pending) suman `total`.
+    -- Van al final porque CREATE OR REPLACE VIEW solo permite agregar columnas
+    -- después de las existentes.
+    COUNT(*) FILTER (WHERE cc.send_status = 'sent') AS sent_only,
+    COUNT(*) FILTER (WHERE cc.send_status = 'delivered') AS delivered_only,
+    COUNT(*) FILTER (
+        WHERE cc.id IS NOT NULL
+          AND (cc.send_status IS NULL
+               OR cc.send_status NOT IN ('sent', 'delivered', 'read', 'failed'))
+    ) AS pending
 FROM sayasend.campaigns c
 LEFT JOIN sayasend.campaign_contacts cc
     ON cc.campaign_id = c.id

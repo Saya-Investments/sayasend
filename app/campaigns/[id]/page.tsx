@@ -6,6 +6,7 @@ import { CampaignDetailView } from '@/components/campaigns/campaign-detail-view'
 import type { ErrorItem } from '@/components/contactability/errors-chart'
 import { Button } from '@/components/ui/button'
 import { prisma } from '@/lib/prisma'
+import type { ContactabilityMetrics } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,9 @@ type MetricsRow = {
   delivered: bigint
   read: bigint
   failed: bigint
+  sent_only: bigint
+  delivered_only: bigint
+  pending: bigint
   delivery_rate: number | null
   read_rate: number | null
   failure_rate: number | null
@@ -70,16 +74,7 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
     )
   }
 
-  let metrics: {
-    total: number
-    sent: number
-    delivered: number
-    read: number
-    failed: number
-    deliveryRate: number
-    readRate: number
-    failureRate: number
-  } | null = null
+  let metrics: ContactabilityMetrics | null = null
 
   try {
     const rows = await prisma.$queryRaw<MetricsRow[]>`
@@ -93,6 +88,9 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
         delivered: Number(row.delivered),
         read: Number(row.read),
         failed: Number(row.failed),
+        sentOnly: Number(row.sent_only),
+        deliveredOnly: Number(row.delivered_only),
+        pending: Number(row.pending),
         deliveryRate: Number(row.delivery_rate ?? 0),
         readRate: Number(row.read_rate ?? 0),
         failureRate: Number(row.failure_rate ?? 0),
@@ -104,22 +102,67 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
 
   let errors: ErrorItem[] = []
   try {
-    const errorRows = await prisma.$queryRaw<Array<{ code: string; count: bigint }>>`
+    // Cada error se atribuye al número al que se envió ese mensaje: el principal
+    // (clientes.telefono) o el alterno (clientes.telefono_3, el segundo intento).
+    // `mensaje_out.phone_to` viene con código de país (57XXXXXXXXXX) y `clientes`
+    // guarda 10 dígitos, así que se comparan los últimos 10.
+    //
+    // Se clasifica como 'alterno' solo si coincide con telefono_3 y NO con el
+    // principal; todo lo demás cae en 'principal'. Mientras telefono_3 esté vacío
+    // (hoy lo está en toda la base) el desglose da 100% principal y el gráfico
+    // sigue mostrándose por contacto, igual que antes.
+    //
+    // GROUPING SETS devuelve además la fila total por código (phone_kind NULL):
+    // no es la suma de los dos, porque un mismo contacto puede fallar con el
+    // mismo código en ambos números y ahí cuenta una sola vez.
+    const errorRows = await prisma.$queryRaw<
+      Array<{ code: string; phone_kind: string | null; count: bigint }>
+    >`
+      WITH eventos AS (
+        SELECT
+          (err->>'code')::text AS code,
+          COALESCE(mo.campaign_contact_id::text, mo.phone_to) AS contacto,
+          CASE
+            WHEN cl.telefono_3 IS NOT NULL
+             AND right(regexp_replace(mo.phone_to, '[^0-9]', '', 'g'), 10)
+                 = right(regexp_replace(cl.telefono_3, '[^0-9]', '', 'g'), 10)
+             AND right(regexp_replace(mo.phone_to, '[^0-9]', '', 'g'), 10)
+                 <> right(regexp_replace(cl.telefono, '[^0-9]', '', 'g'), 10)
+            THEN 'alterno'
+            ELSE 'principal'
+          END AS phone_kind
+        FROM sayasend.mensaje_status_event mse
+        JOIN sayasend.mensaje_out mo ON mse.id_msg = mo.id_msg
+        LEFT JOIN sayasend.campaign_contacts cc ON cc.id = mo.campaign_contact_id
+        LEFT JOIN sayasend.clientes cl ON cl.id = cc.cliente_id
+        CROSS JOIN LATERAL jsonb_array_elements(mse.errors_json) AS err
+        WHERE mo.campaign_id = ${id}::uuid
+          AND mse.errors_json IS NOT NULL
+          AND jsonb_typeof(mse.errors_json) = 'array'
+          AND err ? 'code'
+      )
       SELECT
-        (err->>'code')::text AS code,
-        COUNT(DISTINCT COALESCE(mo.campaign_contact_id::text, mo.phone_to))::bigint AS count
-      FROM sayasend.mensaje_status_event mse
-      JOIN sayasend.mensaje_out mo ON mse.id_msg = mo.id_msg
-      CROSS JOIN LATERAL jsonb_array_elements(mse.errors_json) AS err
-      WHERE mo.campaign_id = ${id}::uuid
-        AND mse.errors_json IS NOT NULL
-        AND jsonb_typeof(mse.errors_json) = 'array'
-        AND err ? 'code'
-      GROUP BY (err->>'code')
-      ORDER BY count DESC
-      LIMIT 10
+        code,
+        phone_kind,
+        COUNT(DISTINCT contacto)::bigint AS count
+      FROM eventos
+      GROUP BY GROUPING SETS ((code), (code, phone_kind))
     `
-    errors = errorRows.map((r) => ({ code: r.code, count: Number(r.count) }))
+
+    const porCodigo = new Map<string, ErrorItem>()
+    for (const row of errorRows) {
+      const item =
+        porCodigo.get(row.code) ??
+        { code: row.code, count: 0, principal: 0, alterno: 0 }
+      if (row.phone_kind === null) item.count = Number(row.count)
+      else if (row.phone_kind === 'alterno') item.alterno = Number(row.count)
+      else item.principal = Number(row.count)
+      porCodigo.set(row.code, item)
+    }
+
+    errors = Array.from(porCodigo.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10)
   } catch (error) {
     console.warn('[CampaignDetail] no se pudieron leer errores:', (error as Error).message)
   }

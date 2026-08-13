@@ -23,15 +23,17 @@ interface ContactabilityChartsProps {
 }
 
 export function ContactabilityCharts({ metrics }: ContactabilityChartsProps) {
-  // Pie chart data
+  // Pie chart: estados excluyentes, si no las porciones se solapan (un leído
+  // también es entregado y enviado) y el pastel deja de sumar el total.
   const statusData = [
-    { name: 'Enviados', value: metrics.sent, color: '#0084D1' },
-    { name: 'Entregados', value: metrics.delivered, color: '#2ECC71' },
+    { name: 'Pendientes', value: metrics.pending, color: '#F39C12' },
+    { name: 'Enviados', value: metrics.sentOnly, color: '#0084D1' },
+    { name: 'Entregados', value: metrics.deliveredOnly, color: '#2ECC71' },
     { name: 'Leídos', value: metrics.read, color: '#9B59B6' },
     { name: 'Fallidos', value: metrics.failed, color: '#E74C3C' },
-  ]
+  ].filter((item) => item.value > 0)
 
-  // Funnel data
+  // Funnel: aquí sí se usan los acumulados, porque cada paso incluye al siguiente.
   const funnelData = [
     {
       name: `Enviados ${metrics.sent} (100%)`,
