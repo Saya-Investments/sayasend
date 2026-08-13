@@ -107,6 +107,17 @@ model CampaignContact {
   failureCode         String?      @map("failure_code") @db.VarChar(50)
   retryCount          Int          @default(0) @map("retry_count")
   repliedAt           DateTime?    @map("replied_at") @db.Timestamp(6)
+  // Resultado de cada número al que intentó enviar el motor: el principal
+  // (clientes.telefono) y el alterno (clientes.telefono_3). Sirve para mostrar
+  // los errores separados por teléfono en el detalle de la campaña.
+  // `failureCode`/`failureReason` de arriba siguen teniendo el último error.
+  phone1              String?      @map("phone_1") @db.VarChar(20)
+  failureCode1        String?      @map("failure_code_1") @db.VarChar(50)
+  failureReason1      String?      @map("failure_reason_1")
+  phone2              String?      @map("phone_2") @db.VarChar(20)
+  failureCode2        String?      @map("failure_code_2") @db.VarChar(50)
+  failureReason2      String?      @map("failure_reason_2")
+  phoneUsed           String?      @map("phone_used") @db.VarChar(20)
   campaign            Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   cliente             Cliente      @relation(fields: [clienteId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   mensajeOuts         MensajeOut[]
