@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
           segmentoFilter: serializeFilterValue(body.segmentFilters.segmento),
           estrategiaFilter: serializeFilterValue(body.segmentFilters.estrategia),
           frenteFilter: serializeFilterValue(body.segmentFilters.frente),
+          rangoMontoFilter: serializeFilterValue(body.segmentFilters.rangoMonto),
           variableMappings: body.variableMappings ?? {},
           totalContacts: body.contacts.length,
           status: 'draft',

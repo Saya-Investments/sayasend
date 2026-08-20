@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   const segmento = cleanList(params.getAll('segmento'))
   const estrategia = cleanList(params.getAll('estrategia'))
   const frente = cleanList(params.getAll('frente'))
+  const rangoMonto = cleanList(params.getAll('rangoMonto'))
   const gestionType = params.get('gestionType')?.trim() ?? 'gestion_m0'
 
   if (!tableName) {
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
       segmento: segmento.length > 0 ? segmento : undefined,
       estrategia: estrategia.length > 0 ? estrategia : undefined,
       frente: frente.length > 0 ? frente : undefined,
+      rangoMonto: rangoMonto.length > 0 ? rangoMonto : undefined,
     }
 
     const result = gestionType === 'gestion_cobranza'

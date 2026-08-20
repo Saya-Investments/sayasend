@@ -100,37 +100,58 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
     console.warn('[CampaignDetail] no se pudo leer métricas:', (error as Error).message)
   }
 
-  let errors: ErrorItem[] = []
+  let principalErrors: ErrorItem[] = []
+  let alternateErrors: ErrorItem[] = []
   try {
-    // Cada error se atribuye al número al que se envió ese mensaje: el principal
-    // (clientes.telefono) o el alterno (clientes.telefono_3, el segundo intento).
-    // `mensaje_out.phone_to` viene con código de país (57XXXXXXXXXX) y `clientes`
-    // guarda 10 dígitos, así que se comparan los últimos 10.
-    //
-    // Se clasifica como 'alterno' solo si coincide con telefono_3 y NO con el
-    // principal; todo lo demás cae en 'principal'. Mientras telefono_3 esté vacío
-    // (hoy lo está en toda la base) el desglose da 100% principal y el gráfico
-    // sigue mostrándose por contacto, igual que antes.
-    //
-    // GROUPING SETS devuelve además la fila total por código (phone_kind NULL):
-    // no es la suma de los dos, porque un mismo contacto puede fallar con el
-    // mismo código en ambos números y ahí cuenta una sola vez.
+    // Los campos failure_code_1/2 son la fuente principal porque el motor los
+    // guarda por intento. Los eventos de WhatsApp solo completan campañas
+    // antiguas (o intentos sin esos campos), sin duplicar contactos ya cubiertos.
     const errorRows = await prisma.$queryRaw<
-      Array<{ code: string; phone_kind: string | null; count: bigint }>
+      Array<{ code: string; phone_kind: 'principal' | 'alterno'; count: bigint }>
     >`
-      WITH eventos AS (
+      WITH intentos_guardados AS (
+        SELECT
+          trim(cc.failure_code_1) AS code,
+          cc.id::text AS contacto,
+          'principal'::text AS phone_kind
+        FROM sayasend.campaign_contacts cc
+        WHERE cc.campaign_id = ${id}::uuid
+          AND NULLIF(trim(cc.failure_code_1), '') IS NOT NULL
+
+        UNION ALL
+
+        SELECT
+          trim(cc.failure_code_2) AS code,
+          cc.id::text AS contacto,
+          'alterno'::text AS phone_kind
+        FROM sayasend.campaign_contacts cc
+        WHERE cc.campaign_id = ${id}::uuid
+          AND NULLIF(trim(cc.failure_code_2), '') IS NOT NULL
+      ),
+      eventos_clasificados AS (
         SELECT
           (err->>'code')::text AS code,
           COALESCE(mo.campaign_contact_id::text, mo.phone_to) AS contacto,
           CASE
-            WHEN cl.telefono_3 IS NOT NULL
+            WHEN NULLIF(
+                   regexp_replace(COALESCE(NULLIF(cc.phone_2, ''), cl.telefono_3), '[^0-9]', '', 'g'),
+                   ''
+                 ) IS NOT NULL
              AND right(regexp_replace(mo.phone_to, '[^0-9]', '', 'g'), 10)
-                 = right(regexp_replace(cl.telefono_3, '[^0-9]', '', 'g'), 10)
+                 = right(
+                     regexp_replace(COALESCE(NULLIF(cc.phone_2, ''), cl.telefono_3), '[^0-9]', '', 'g'),
+                     10
+                   )
              AND right(regexp_replace(mo.phone_to, '[^0-9]', '', 'g'), 10)
-                 <> right(regexp_replace(cl.telefono, '[^0-9]', '', 'g'), 10)
+                 IS DISTINCT FROM right(
+                   regexp_replace(COALESCE(NULLIF(cc.phone_1, ''), cl.telefono), '[^0-9]', '', 'g'),
+                   10
+                 )
             THEN 'alterno'
             ELSE 'principal'
-          END AS phone_kind
+          END AS phone_kind,
+          cc.failure_code_1,
+          cc.failure_code_2
         FROM sayasend.mensaje_status_event mse
         JOIN sayasend.mensaje_out mo ON mse.id_msg = mo.id_msg
         LEFT JOIN sayasend.campaign_contacts cc ON cc.id = mo.campaign_contact_id
@@ -140,28 +161,34 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
           AND mse.errors_json IS NOT NULL
           AND jsonb_typeof(mse.errors_json) = 'array'
           AND err ? 'code'
+      ),
+      eventos_legacy AS (
+        SELECT code, contacto, phone_kind
+        FROM eventos_clasificados
+        WHERE (phone_kind = 'principal' AND NULLIF(trim(failure_code_1), '') IS NULL)
+           OR (phone_kind = 'alterno' AND NULLIF(trim(failure_code_2), '') IS NULL)
+      ),
+      intentos AS (
+        SELECT code, contacto, phone_kind FROM intentos_guardados
+        UNION ALL
+        SELECT code, contacto, phone_kind FROM eventos_legacy
       )
       SELECT
         code,
         phone_kind,
         COUNT(DISTINCT contacto)::bigint AS count
-      FROM eventos
-      GROUP BY GROUPING SETS ((code), (code, phone_kind))
+      FROM intentos
+      GROUP BY phone_kind, code
+      ORDER BY phone_kind, count DESC, code
     `
 
-    const porCodigo = new Map<string, ErrorItem>()
-    for (const row of errorRows) {
-      const item =
-        porCodigo.get(row.code) ??
-        { code: row.code, count: 0, principal: 0, alterno: 0 }
-      if (row.phone_kind === null) item.count = Number(row.count)
-      else if (row.phone_kind === 'alterno') item.alterno = Number(row.count)
-      else item.principal = Number(row.count)
-      porCodigo.set(row.code, item)
-    }
-
-    errors = Array.from(porCodigo.values())
-      .sort((a, b) => b.count - a.count)
+    principalErrors = errorRows
+      .filter((row) => row.phone_kind === 'principal')
+      .map((row) => ({ code: row.code, count: Number(row.count) }))
+      .slice(0, 10)
+    alternateErrors = errorRows
+      .filter((row) => row.phone_kind === 'alterno')
+      .map((row) => ({ code: row.code, count: Number(row.count) }))
       .slice(0, 10)
   } catch (error) {
     console.warn('[CampaignDetail] no se pudieron leer errores:', (error as Error).message)
@@ -185,7 +212,12 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
           </div>
         </div>
 
-        <CampaignDetailView campaign={campaign} metrics={metrics} errors={errors} />
+        <CampaignDetailView
+          campaign={campaign}
+          metrics={metrics}
+          principalErrors={principalErrors}
+          alternateErrors={alternateErrors}
+        />
       </div>
     </AppLayout>
   )

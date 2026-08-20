@@ -67,6 +67,7 @@ type ExistingClienteFields = {
   segmento: string | null
   estrategia: string | null
   frente: string | null
+  rangoMonto: string | null
   mes: string | null
   mesPasado: string | null
   monto: Prisma.Decimal | null
@@ -108,6 +109,7 @@ function buildClienteData(contact: CampaignContact) {
     segmento: contact.segmento || null,
     estrategia: contact.gestion || null,
     frente: contact.frente || null,
+    rangoMonto: contact.rangoMonto || null,
     fechaAsamblea: toNullableDate(contact.fechaAsamblea),
     fechaVencimiento: toNullableDate(contact.fechaVencimiento),
     fecUltPagCcap: toNullableDate(contact.fecUltPagCcap),
@@ -138,6 +140,7 @@ function buildFillOnlyData(
   if (isBlankStr(existing.segmento) && !isBlankStr(fresh.segmento)) fill.segmento = String(fresh.segmento).trim()
   if (isBlankStr(existing.estrategia) && !isBlankStr(fresh.estrategia)) fill.estrategia = String(fresh.estrategia).trim()
   if (isBlankStr(existing.frente) && !isBlankStr(fresh.frente)) fill.frente = String(fresh.frente).trim()
+  if (isBlankStr(existing.rangoMonto) && !isBlankStr(fresh.rangoMonto)) fill.rangoMonto = String(fresh.rangoMonto).trim()
   if (isBlankStr(existing.mes) && !isBlankStr(fresh.mes)) fill.mes = String(fresh.mes).trim()
   if (isBlankStr(existing.mesPasado) && !isBlankStr(fresh.mesPasado)) fill.mesPasado = String(fresh.mesPasado).trim()
 
@@ -203,6 +206,7 @@ export async function freezeCampaignContacts(
       segmento: true,
       estrategia: true,
       frente: true,
+      rangoMonto: true,
       mes: true,
       mesPasado: true,
       monto: true,

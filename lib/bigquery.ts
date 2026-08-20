@@ -24,6 +24,7 @@ export type BigQueryContactFilters = {
   segmento?: string | string[]
   estrategia?: string | string[]
   frente?: string | string[]
+  rangoMonto?: string | string[]
 }
 
 // Normaliza un filtro (string único, arreglo o undefined) a una lista de
@@ -263,6 +264,27 @@ export async function listBigQueryEstrategias(tableName: string): Promise<string
     .filter((value): value is string => value !== null)
 }
 
+export async function listBigQueryRangoMontos(tableName: string): Promise<string[]> {
+  validateTableName(tableName)
+
+  const query = `
+    SELECT DISTINCT CAST(\`rango_monto\` AS STRING) AS rango_monto
+    FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\`
+    WHERE \`rango_monto\` IS NOT NULL
+      AND CAST(\`rango_monto\` AS STRING) != ''
+    ORDER BY rango_monto
+  `
+
+  const [rows] = await getBigQueryClient().query({ query })
+
+  return rows
+    .map((row) => {
+      const serialized = serializeBigQueryValue(row) as Record<string, unknown>
+      return toNullableString(serialized.rango_monto)
+    })
+    .filter((value): value is string => value !== null)
+}
+
 export async function queryBigQueryContactsCobranza(
   tableName: string,
   filters: BigQueryContactFilters,
@@ -288,6 +310,12 @@ export async function queryBigQueryContactsCobranza(
   if (frentes.length > 0) {
     clauses.push('CAST(src.`Frente` AS STRING) IN UNNEST(@frente)')
     params.frente = frentes
+  }
+
+  const rangoMontos = toFilterList(filters.rangoMonto)
+  if (rangoMontos.length > 0) {
+    clauses.push('CAST(src.`rango_monto` AS STRING) IN UNNEST(@rangoMonto)')
+    params.rangoMonto = rangoMontos
   }
 
   const whereClause = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : ''
@@ -342,6 +370,7 @@ export async function queryBigQueryContactsCobranza(
         CAST(src.\`segmento\` AS STRING) AS segmento,
         CAST(src.\`estrategia\` AS STRING) AS estrategia,
         CAST(src.\`Frente\` AS STRING) AS frente,
+        CAST(src.\`rango_monto\` AS STRING) AS rango_monto,
         sig.fecha_inicio_siguiente AS fecha_asamblea,
         ciclo.fecha_fin_ciclo AS fecha_vencimiento,
         CAST(src.\`mes\` AS STRING) AS mes,
@@ -386,6 +415,7 @@ export async function queryBigQueryContactsCobranza(
       ANY_VALUE(segmento) AS segmento,
       ANY_VALUE(estrategia) AS gestion,
       ANY_VALUE(frente) AS frente,
+      ANY_VALUE(rango_monto) AS rangoMonto,
       ANY_VALUE(nombre) AS nombre,
       ANY_VALUE(telefono) AS telefono,
       -- Telefono_3 casi siempre viene vacío: nos quedamos con el primero de los
@@ -431,6 +461,7 @@ export async function queryBigQueryContactsCobranza(
       segmento: toStringValue(row.segmento),
       gestion: toStringValue(row.gestion),
       frente: toNullableString(row.frente),
+      rangoMonto: toNullableString(row.rangoMonto),
       nombre: toStringValue(row.nombre),
       telefono,
       telefono3: toNullableString(row.telefono3),
@@ -456,6 +487,7 @@ export async function queryBigQueryContactsCobranza(
     { name: 'segmento', type: 'STRING' },
     { name: 'gestion', type: 'STRING' },
     { name: 'frente', type: 'STRING' },
+    { name: 'rangoMonto', type: 'STRING' },
     { name: 'nombre', type: 'STRING' },
     { name: 'telefono', type: 'STRING' },
     { name: 'telefono3', type: 'STRING' },
@@ -505,6 +537,12 @@ export async function queryBigQueryContacts(
     params.frente = frentes
   }
 
+  const rangoMontos = toFilterList(filters.rangoMonto)
+  if (rangoMontos.length > 0) {
+    clauses.push('CAST(src.`rango_monto` AS STRING) IN UNNEST(@rangoMonto)')
+    params.rangoMonto = rangoMontos
+  }
+
   const whereClause = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : ''
 
   const query = `
@@ -544,6 +582,7 @@ export async function queryBigQueryContacts(
         CAST(src.\`segmento\` AS STRING) AS segmento,
         CAST(src.\`estrategia\` AS STRING) AS estrategia,
         CAST(src.\`Frente\` AS STRING) AS frente,
+        CAST(src.\`rango_monto\` AS STRING) AS rango_monto,
         SAFE_CAST(src.\`Cuota\` AS NUMERIC) AS cuota,
         sig.fecha_inicio_siguiente AS fecha_asamblea,
         ciclo.fecha_fin_ciclo AS fecha_vencimiento,
@@ -583,6 +622,7 @@ export async function queryBigQueryContacts(
       ANY_VALUE(segmento HAVING MAX IFNULL(cuota, 0)) AS segmento,
       ANY_VALUE(estrategia HAVING MAX IFNULL(cuota, 0)) AS gestion,
       ANY_VALUE(frente HAVING MAX IFNULL(cuota, 0)) AS frente,
+      ANY_VALUE(rango_monto HAVING MAX IFNULL(cuota, 0)) AS rangoMonto,
       ANY_VALUE(nombre HAVING MAX IFNULL(cuota, 0)) AS nombre,
       ANY_VALUE(telefono HAVING MAX IFNULL(cuota, 0)) AS telefono,
       -- Telefono_3 casi siempre viene vacío: en vez de atarlo al contrato de
@@ -623,6 +663,7 @@ export async function queryBigQueryContacts(
       segmento: toStringValue(row.segmento),
       gestion: toStringValue(row.gestion),
       frente: toNullableString(row.frente),
+      rangoMonto: toNullableString(row.rangoMonto),
       nombre: toStringValue(row.nombre),
       telefono,
       telefono3: toNullableString(row.telefono3),
@@ -643,6 +684,7 @@ export async function queryBigQueryContacts(
     { name: 'segmento', type: 'STRING' },
     { name: 'gestion', type: 'STRING' },
     { name: 'frente', type: 'STRING' },
+    { name: 'rangoMonto', type: 'STRING' },
     { name: 'nombre', type: 'STRING' },
     { name: 'telefono', type: 'STRING' },
     { name: 'telefono3', type: 'STRING' },

@@ -21,6 +21,7 @@ export interface CampaignContact {
   numDoc: string
   probabilidadPago?: number
   segmento: string
+  rangoMonto?: string | null
   gestion?: string
   frente?: string | null
   nombre: string
@@ -50,6 +51,7 @@ export interface Campaign {
     segmento?: string | string[]
     estrategia?: string | string[]
     frente?: string | string[]
+    rangoMonto?: string | string[]
   }
   variableMappings: {
     [variablePlaceholder: string]: string
@@ -111,6 +113,7 @@ export interface CreateCampaignPayload {
     segmento?: string | string[]
     estrategia?: string | string[]
     frente?: string | string[]
+    rangoMonto?: string | string[]
   }
   variableMappings: {
     [variablePlaceholder: string]: string

@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Check, ChevronsUpDown } from 'lucide-react'
+import { toast } from 'sonner'
 
 import {
   createCampaign,
@@ -9,6 +11,7 @@ import {
   getBigQueryDatabases,
   getBigQueryEstrategias,
   getBigQueryFrentes,
+  getBigQueryRangoMontos,
 } from '@/lib/api'
 import { parseContactsExcel } from '@/lib/excel-contacts'
 import type {
@@ -86,6 +89,7 @@ function formatDate(value: string | Date | null | undefined) {
 }
 
 export function CampaignForm() {
+  const router = useRouter()
   const [campaignName, setCampaignName] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [source, setSource] = useState<CampaignSource>('bigquery')
@@ -97,10 +101,13 @@ export function CampaignForm() {
   const [selectedSegmentos, setSelectedSegmentos] = useState<string[]>([])
   const [selectedEstrategias, setSelectedEstrategias] = useState<string[]>([])
   const [selectedFrentes, setSelectedFrentes] = useState<string[]>([])
+  const [selectedRangoMontos, setSelectedRangoMontos] = useState<string[]>([])
   const [frentes, setFrentes] = useState<string[]>([])
   const [isLoadingFrentes, setIsLoadingFrentes] = useState(false)
   const [estrategias, setEstrategias] = useState<string[]>([])
   const [isLoadingEstrategias, setIsLoadingEstrategias] = useState(false)
+  const [rangoMontos, setRangoMontos] = useState<string[]>([])
+  const [isLoadingRangoMontos, setIsLoadingRangoMontos] = useState(false)
   const [showContacts, setShowContacts] = useState(false)
   const [variableMappings, setVariableMappings] = useState<Record<string, string>>({})
   const [databases, setDatabases] = useState<BigQueryDatabase[]>([])
@@ -194,6 +201,8 @@ export function CampaignForm() {
       setSelectedFrentes([])
       setEstrategias([])
       setSelectedEstrategias([])
+      setRangoMontos([])
+      setSelectedRangoMontos([])
       return
     }
 
@@ -225,8 +234,23 @@ export function CampaignForm() {
       setIsLoadingEstrategias(false)
     }
 
+    const loadRangoMontos = async () => {
+      setIsLoadingRangoMontos(true)
+      const response = await getBigQueryRangoMontos(databaseName)
+
+      if (!response.success || !Array.isArray(response.data)) {
+        setRangoMontos([])
+        setIsLoadingRangoMontos(false)
+        return
+      }
+
+      setRangoMontos(response.data as string[])
+      setIsLoadingRangoMontos(false)
+    }
+
     loadFrentes()
     loadEstrategias()
+    loadRangoMontos()
   }, [databaseName, source])
 
   const resetContactSelection = () => {
@@ -237,6 +261,7 @@ export function CampaignForm() {
     setSuccessMessage('')
     setSelectedFrentes([])
     setSelectedEstrategias([])
+    setSelectedRangoMontos([])
     setContactsPage(1)
     setExcelFileName('')
     setExcelWarnings([])
@@ -250,6 +275,7 @@ export function CampaignForm() {
     setSource(next)
     setDatabaseName('')
     setSelectedSegmentos([])
+    setSelectedRangoMontos([])
     setErrorMessage('')
     resetContactSelection()
   }
@@ -312,6 +338,7 @@ export function CampaignForm() {
       segmento: selectedSegmentos.length > 0 ? selectedSegmentos : undefined,
       estrategia: selectedEstrategias.length > 0 ? selectedEstrategias : undefined,
       frente: selectedFrentes.length > 0 ? selectedFrentes : undefined,
+      rangoMonto: selectedRangoMontos.length > 0 ? selectedRangoMontos : undefined,
       gestionType,
     })
 
@@ -403,6 +430,7 @@ export function CampaignForm() {
               segmento: selectedSegmentos.length > 0 ? selectedSegmentos : undefined,
               estrategia: selectedEstrategias.length > 0 ? selectedEstrategias : undefined,
               frente: selectedFrentes.length > 0 ? selectedFrentes : undefined,
+              rangoMonto: selectedRangoMontos.length > 0 ? selectedRangoMontos : undefined,
             }
           : {},
       variableMappings,
@@ -414,13 +442,28 @@ export function CampaignForm() {
     const response = await createCampaign(payload)
 
     if (!response.success) {
-      setErrorMessage(response.error || 'No se pudo crear la campaña.')
+      const errorMsg = response.error || 'No se pudo crear la campaña.'
+      setErrorMessage(errorMsg)
       setIsCreatingCampaign(false)
+      toast.error('Error al crear campaña', {
+        description: errorMsg,
+        duration: 5000,
+      })
       return
     }
 
-    setSuccessMessage(`Campaña creada correctamente con ${filteredContacts.length} clientes.`)
+    const successMsg = `Campaña creada correctamente con ${filteredContacts.length} clientes.`
+    setSuccessMessage(successMsg)
     setIsCreatingCampaign(false)
+    toast.success('Campaña creada exitosamente', {
+      description: successMsg,
+      duration: 5000,
+    })
+
+    // Redirigir a la lista de campañas después de 1.5 segundos
+    setTimeout(() => {
+      router.push('/campaigns')
+    }, 1500)
   }
 
   const canCreateCampaign =
@@ -555,6 +598,27 @@ export function CampaignForm() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="rango-monto">Rango de Monto</Label>
+                  <MultiSelect
+                    id="rango-monto"
+                    value={selectedRangoMontos}
+                    onChange={setSelectedRangoMontos}
+                    disabled={!databaseName || isLoadingRangoMontos}
+                    placeholder={
+                      !databaseName
+                        ? 'Selecciona una tabla primero'
+                        : isLoadingRangoMontos
+                          ? 'Cargando rangos...'
+                          : 'Todos'
+                    }
+                    emptyText="No hay rangos disponibles"
+                    options={rangoMontos.map((rangoMontoOption) => ({ value: rangoMontoOption }))}
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   onClick={() => handleApplyFilters('gestion_m0')}
@@ -668,6 +732,7 @@ export function CampaignForm() {
                       <TableHead>Num Doc</TableHead>
                       <TableHead>Probabilidad Pago</TableHead>
                       <TableHead>Segmento</TableHead>
+                      <TableHead>Rango Monto</TableHead>
                       <TableHead>Gestion</TableHead>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Telefono</TableHead>
@@ -700,6 +765,7 @@ export function CampaignForm() {
                         <TableCell>
                           <Badge variant="outline">{contact.segmento || '-'}</Badge>
                         </TableCell>
+                        <TableCell>{contact.rangoMonto || '-'}</TableCell>
                         <TableCell>{contact.gestion || '-'}</TableCell>
                         <TableCell className="font-medium">{contact.nombre || '-'}</TableCell>
                         <TableCell>{contact.telefono || '-'}</TableCell>

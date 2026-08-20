@@ -28,7 +28,32 @@
       "Bash(git config *)",
       "Bash(node \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/128673c9-6194-48cb-92bc-14f56e77f098/scratchpad/vercel.mjs\" list)",
       "Bash(node \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/128673c9-6194-48cb-92bc-14f56e77f098/scratchpad/vercel.mjs\" deploy)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(node \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/b7f45372-9d3b-47d8-bd55-63e92365f130/scratchpad/cols.mjs\")",
+      "Bash(node tmp-cols.mjs)",
+      "Bash(rm -f tmp-cols.mjs)",
+      "Bash(npx prisma *)",
+      "Bash(node -r dotenv/config \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/a79bee82-8b4b-415e-b543-2c1ccd83195a/scratchpad/check-phones.mjs\" dotenv_config_path=.env.local)",
+      "Bash(node --env-file=.env.local \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/a79bee82-8b4b-415e-b543-2c1ccd83195a/scratchpad/check-phones.mjs\")",
+      "Bash(cp \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/a79bee82-8b4b-415e-b543-2c1ccd83195a/scratchpad/check-phones.mjs\" ./.tmp-check-phones.mjs)",
+      "Bash(node --env-file=.env.local ./.tmp-check-phones.mjs)",
+      "Bash(cp \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/a79bee82-8b4b-415e-b543-2c1ccd83195a/scratchpad/check-phones2.mjs\" ./.tmp-check2.mjs)",
+      "Bash(node --env-file=.env.local ./.tmp-check2.mjs)",
+      "Bash(cp \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/a79bee82-8b4b-415e-b543-2c1ccd83195a/scratchpad/check3.mjs\" ./.tmp3.mjs)",
+      "Bash(node --env-file=.env.local ./.tmp3.mjs)",
+      "Bash(cp \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/a79bee82-8b4b-415e-b543-2c1ccd83195a/scratchpad/check4.mjs\" ./.tmp4.mjs)",
+      "Bash(node --env-file=.env.local ./.tmp4.mjs)",
+      "Bash(cp \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/a79bee82-8b4b-415e-b543-2c1ccd83195a/scratchpad/check5.mjs\" ./.tmp5.mjs)",
+      "Bash(node --env-file=.env.local ./.tmp5.mjs)",
+      "Bash(cp \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/a79bee82-8b4b-415e-b543-2c1ccd83195a/scratchpad/verify.mjs\" ./.tmpv.mjs)",
+      "Bash(node --env-file=.env.local ./.tmpv.mjs)",
+      "Bash(cp \"C:/Users/Usuario/AppData/Local/Temp/claude/d--SAYA-2026-Motor-de-Envios-sayasend/a79bee82-8b4b-415e-b543-2c1ccd83195a/scratchpad/simular.mjs\" ./.tmps.mjs)",
+      "Bash(node --env-file=.env.local ./.tmps.mjs)",
+      "Bash(node prisma/run-sql.mjs prisma/exclusive-status-metrics.sql)",
+      "Bash(npx vercel *)",
+      "Bash(git reset *)",
+      "Bash(git commit -q -m '@ *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

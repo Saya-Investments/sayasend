@@ -57,6 +57,9 @@ type CampaignDetail = {
   scheduledAt: Date | string | null
   segmentoFilter: string | null
   estrategiaFilter: string | null
+  frenteFilter: string | null
+  rangoMontoFilter: string | null
+  variableMappings: Record<string, string>
   template: { nombre: string; contenido: string } | null
   campaignContacts: CampaignContactLite[]
 }
@@ -92,11 +95,13 @@ const CONTACT_STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default'
 export function CampaignDetailView({
   campaign,
   metrics,
-  errors,
+  principalErrors,
+  alternateErrors,
 }: {
   campaign: CampaignDetail
   metrics: Metrics | null
-  errors: ErrorItem[]
+  principalErrors: ErrorItem[]
+  alternateErrors: ErrorItem[]
 }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0])
@@ -128,6 +133,8 @@ export function CampaignDetailView({
             <Field label="Modo de Envío" value={campaign.sendMode ?? '—'} />
             <Field label="Segmento" value={formatFilterValue(campaign.segmentoFilter, 'Todos')} />
             <Field label="Estrategia" value={formatFilterValue(campaign.estrategiaFilter, 'Todas')} />
+            <Field label="Frente" value={formatFilterValue(campaign.frenteFilter, 'Todos')} />
+            <Field label="Rango Monto" value={formatFilterValue(campaign.rangoMontoFilter, 'Todos')} />
             <Field
               label="Programada para"
               value={
@@ -147,12 +154,26 @@ export function CampaignDetailView({
           <CardHeader>
             <CardTitle>Plantilla</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="bg-muted p-4 rounded-lg border border-border">
               <p className="text-sm text-foreground whitespace-pre-wrap break-words">
                 {campaign.template?.contenido ?? '—'}
               </p>
             </div>
+            {Object.keys(campaign.variableMappings).length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-foreground">Mapeo de Variables</p>
+                <div className="space-y-1">
+                  {Object.entries(campaign.variableMappings)
+                    .sort(([a], [b]) => Number(a) - Number(b))
+                    .map(([index, columnName]) => (
+                      <p key={index} className="text-sm text-muted-foreground">
+                        <span className="font-mono">{'{{' + index + '}}'}</span>: {columnName}
+                      </p>
+                    ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -277,7 +298,10 @@ export function CampaignDetailView({
           <MetricsCards metrics={metrics} />
           <RateCards metrics={metrics} />
           <ContactabilityCharts metrics={metrics} />
-          <ErrorsChart errors={errors} />
+          <ErrorsChart
+            principalErrors={principalErrors}
+            alternateErrors={alternateErrors}
+          />
         </div>
       )}
     </div>

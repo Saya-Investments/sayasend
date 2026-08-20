@@ -174,6 +174,7 @@ export async function getBigQueryContacts(filters: {
   segmento?: string | string[]
   estrategia?: string | string[]
   frente?: string | string[]
+  rangoMonto?: string | string[]
   gestionType?: 'gestion_m0' | 'gestion_cobranza'
 }) {
   const queryParams = new URLSearchParams({
@@ -192,6 +193,7 @@ export async function getBigQueryContacts(filters: {
   appendMulti('segmento', filters.segmento)
   appendMulti('estrategia', filters.estrategia)
   appendMulti('frente', filters.frente)
+  appendMulti('rangoMonto', filters.rangoMonto)
   if (filters.gestionType) queryParams.append('gestionType', filters.gestionType)
 
   return internalApiCall(`/api/bigquery/contacts?${queryParams.toString()}`)
@@ -205,4 +207,9 @@ export async function getBigQueryFrentes(databaseName: string) {
 export async function getBigQueryEstrategias(databaseName: string) {
   const queryParams = new URLSearchParams({ databaseName })
   return internalApiCall(`/api/bigquery/estrategias?${queryParams.toString()}`)
+}
+
+export async function getBigQueryRangoMontos(databaseName: string) {
+  const queryParams = new URLSearchParams({ databaseName })
+  return internalApiCall(`/api/bigquery/rango-montos?${queryParams.toString()}`)
 }
