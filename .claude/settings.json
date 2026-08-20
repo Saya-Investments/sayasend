@@ -53,7 +53,9 @@
       "Bash(npx vercel *)",
       "Bash(git reset *)",
       "Bash(git commit -q -m '@ *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(vercel --version)",
+      "Bash(vercel deploy *)"
     ]
   }
 }

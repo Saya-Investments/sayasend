@@ -459,11 +459,6 @@ export function CampaignForm() {
       description: successMsg,
       duration: 5000,
     })
-
-    // Redirigir a la lista de campañas después de 1.5 segundos
-    setTimeout(() => {
-      router.push('/campaigns')
-    }, 1500)
   }
 
   const canCreateCampaign =
