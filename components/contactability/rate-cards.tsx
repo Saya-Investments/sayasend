@@ -5,29 +5,37 @@ import type { ContactabilityMetrics } from '@/lib/types'
 
 interface RateCardsProps {
   metrics: ContactabilityMetrics
+  denominator?: number
+  denominatorLabel?: string
 }
 
-export function RateCards({ metrics }: RateCardsProps) {
+export function RateCards({
+  metrics,
+  denominator = metrics.total,
+  denominatorLabel = 'contactos',
+}: RateCardsProps) {
+  const rate = (value: number) => (denominator > 0 ? (value * 100) / denominator : 0)
+
   // Las tres se calculan sobre el total, así que no son excluyentes entre sí:
   // los leídos ya están contados dentro de los entregados. La descripción deja
   // explícito el numerador para que no se lean como partes de un mismo 100%.
   const rates = [
     {
       title: 'Tasa de Entrega',
-      value: metrics.deliveryRate.toFixed(1),
-      description: `${metrics.delivered} de ${metrics.total} contactos alcanzaron entrega (incluye los leídos)`,
+      value: rate(metrics.delivered).toFixed(1),
+      description: `${metrics.delivered} de ${denominator} ${denominatorLabel} alcanzaron entrega (incluye los leídos)`,
       color: 'text-green-600',
     },
     {
       title: 'Tasa de Lectura',
-      value: metrics.readRate.toFixed(1),
-      description: `${metrics.read} de ${metrics.total} contactos alcanzaron lectura`,
+      value: rate(metrics.read).toFixed(1),
+      description: `${metrics.read} de ${denominator} ${denominatorLabel} alcanzaron lectura`,
       color: 'text-purple-600',
     },
     {
       title: 'Tasa de Fallo',
-      value: metrics.failureRate.toFixed(1),
-      description: `${metrics.failed} de ${metrics.total} contactos fallaron al enviarse`,
+      value: rate(metrics.failed).toFixed(1),
+      description: `${metrics.failed} de ${denominator} ${denominatorLabel} fallaron al enviarse`,
       color: 'text-red-600',
     },
   ]

@@ -12,10 +12,27 @@ import { Button } from '@/components/ui/button'
 export type ScheduledCampaign = {
   id: string
   nombre: string
+  status: string
   scheduledAt: string // ISO
   totalContacts: number
   refreshOnSend: boolean
   template: { nombre: string } | null
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  draft: 'Borrador',
+  scheduled: 'Programada',
+  sending: 'Enviando',
+  completed: 'Completada',
+  failed: 'Fallida',
+}
+
+const STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default' | 'destructive'> = {
+  draft: 'secondary',
+  scheduled: 'outline',
+  sending: 'default',
+  completed: 'default',
+  failed: 'destructive',
 }
 
 // Clave de día por sus componentes locales — agrupa las campañas igual que se
@@ -46,11 +63,12 @@ export function CampaignsCalendar({ campaigns }: { campaigns: ScheduledCampaign[
     return set
   }, [items])
 
-  // Día seleccionado: por defecto la próxima campaña programada (o hoy).
+  // Día seleccionado: la próxima campaña; si ya no hay ninguna, la pasada más
+  // reciente. De ese modo el historial no abre en la fecha más antigua.
   const [selected, setSelected] = useState<Date | undefined>(() => {
     const now = new Date()
     const upcoming = items.find((item) => item.date.getTime() >= now.getTime())
-    return upcoming?.date ?? items[0]?.date ?? now
+    return upcoming?.date ?? items.at(-1)?.date ?? now
   })
 
   const dayCampaigns = useMemo(() => {
@@ -126,6 +144,9 @@ export function CampaignsCalendar({ campaigns }: { campaigns: ScheduledCampaign[
                     <Badge variant="outline" className="gap-1">
                       <CalendarClock className="size-3" />
                       {formatTime(campaign.date)}
+                    </Badge>
+                    <Badge variant={STATUS_VARIANT[campaign.status] ?? 'secondary'}>
+                      {STATUS_LABEL[campaign.status] ?? campaign.status}
                     </Badge>
                     <Badge variant="outline" className="gap-1">
                       <Users className="size-3" />

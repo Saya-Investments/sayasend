@@ -1,3 +1,5 @@
+import { Prisma } from '@prisma/client'
+
 import { prisma } from '@/lib/prisma'
 import type { ContactabilityMetrics } from '@/lib/types'
 
@@ -22,6 +24,11 @@ export type CampaignContactability = {
   alternate: ContactabilityMetrics
   secondarySummary: SecondaryContactabilitySummary
   errors: Record<ContactabilityScope, ContactabilityError[]>
+}
+
+export type CampaignGlobalSendStats = {
+  enviados: number
+  fallidos: number
 }
 
 type StatusRow = {
@@ -106,6 +113,151 @@ function summaryFromRows(rows: StatusRow[]): SecondaryContactabilitySummary {
     retried: retriedWithAlternate,
     notRetried: withAlternate - retriedWithAlternate,
   }
+}
+
+export async function getCampaignGlobalSendStats(
+  campaignIds: string[],
+): Promise<Map<string, CampaignGlobalSendStats>> {
+  if (campaignIds.length === 0) return new Map()
+
+  const rows = await prisma.$queryRaw<
+    Array<{ campaign_id: string; enviados: bigint; fallidos: bigint }>
+  >(Prisma.sql`
+    WITH contactos AS (
+      SELECT
+        cc.id,
+        cc.campaign_id,
+        cc.send_status,
+        cc.retry_count,
+        cc.failure_code_1,
+        cc.failure_code_2,
+        NULLIF(trim(cc.phone_1), '') AS phone_1,
+        NULLIF(trim(cc.phone_2), '') AS phone_2,
+        right(regexp_replace(COALESCE(NULLIF(trim(cc.phone_1), ''), cl.telefono), '[^0-9]', '', 'g'), 10)
+          AS principal_phone,
+        NULLIF(
+          right(regexp_replace(COALESCE(NULLIF(trim(cc.phone_2), ''), cl.telefono_3), '[^0-9]', '', 'g'), 10),
+          ''
+        ) AS alternate_phone
+      FROM sayasend.campaign_contacts cc
+      JOIN sayasend.clientes cl ON cl.id = cc.cliente_id
+      WHERE cc.campaign_id IN (${Prisma.join(campaignIds.map((id) => Prisma.sql`${id}::uuid`))})
+    ),
+    mensajes_clasificados AS (
+      SELECT
+        mo.id_msg,
+        c.id AS contact_id,
+        CASE
+          WHEN c.alternate_phone IS NOT NULL
+           AND right(regexp_replace(mo.phone_to, '[^0-9]', '', 'g'), 10) = c.alternate_phone
+           AND right(regexp_replace(mo.phone_to, '[^0-9]', '', 'g'), 10)
+               IS DISTINCT FROM c.principal_phone
+          THEN 'alterno'
+          ELSE 'principal'
+        END AS phone_kind
+      FROM sayasend.mensaje_out mo
+      JOIN contactos c ON c.id = mo.campaign_contact_id
+    ),
+    estado_por_mensaje AS (
+      SELECT
+        mc.id_msg,
+        mc.contact_id,
+        mc.phone_kind,
+        CASE
+          WHEN COALESCE(bool_or(
+            mse.estado = 'failed'
+            OR CASE
+              WHEN jsonb_typeof(mse.errors_json) = 'array'
+              THEN jsonb_array_length(mse.errors_json) > 0
+              ELSE false
+            END
+          ), false) THEN 'failed'
+          WHEN COALESCE(bool_or(mse.estado = 'read'), false) THEN 'read'
+          WHEN COALESCE(bool_or(mse.estado = 'delivered'), false) THEN 'delivered'
+          ELSE 'sent'
+        END AS status
+      FROM mensajes_clasificados mc
+      LEFT JOIN sayasend.mensaje_status_event mse ON mse.id_msg = mc.id_msg
+      GROUP BY mc.id_msg, mc.contact_id, mc.phone_kind
+    ),
+    estado_por_intento AS (
+      SELECT
+        contact_id,
+        phone_kind,
+        CASE MAX(
+          CASE status
+            WHEN 'read' THEN 4
+            WHEN 'delivered' THEN 3
+            WHEN 'sent' THEN 2
+            WHEN 'failed' THEN 1
+            ELSE 0
+          END
+        )
+          WHEN 4 THEN 'read'
+          WHEN 3 THEN 'delivered'
+          WHEN 2 THEN 'sent'
+          WHEN 1 THEN 'failed'
+          ELSE NULL
+        END AS status
+      FROM estado_por_mensaje
+      GROUP BY contact_id, phone_kind
+    ),
+    estados AS (
+      SELECT
+        c.campaign_id,
+        CASE
+          WHEN (
+            CASE
+              WHEN NULLIF(trim(c.failure_code_1), '') IS NOT NULL THEN 'failed'
+              WHEN principal.status IS NOT NULL THEN principal.status
+              WHEN c.phone_2 IS NULL
+               AND c.retry_count = 0
+               AND c.send_status IN ('sent', 'delivered', 'read', 'failed')
+              THEN c.send_status
+              ELSE 'pending'
+            END
+          ) <> 'failed'
+          THEN CASE
+            WHEN NULLIF(trim(c.failure_code_1), '') IS NOT NULL THEN 'failed'
+            WHEN principal.status IS NOT NULL THEN principal.status
+            WHEN c.phone_2 IS NULL
+             AND c.retry_count = 0
+             AND c.send_status IN ('sent', 'delivered', 'read', 'failed')
+            THEN c.send_status
+            ELSE 'pending'
+          END
+          WHEN (
+            CASE
+              WHEN NULLIF(trim(c.failure_code_2), '') IS NOT NULL THEN 'failed'
+              ELSE alterno.status
+            END
+          ) IN ('sent', 'delivered', 'read')
+          THEN CASE
+            WHEN NULLIF(trim(c.failure_code_2), '') IS NOT NULL THEN 'failed'
+            ELSE alterno.status
+          END
+          ELSE 'failed'
+        END AS global_status
+      FROM contactos c
+      LEFT JOIN estado_por_intento principal
+        ON principal.contact_id = c.id AND principal.phone_kind = 'principal'
+      LEFT JOIN estado_por_intento alterno
+        ON alterno.contact_id = c.id AND alterno.phone_kind = 'alterno'
+    )
+    SELECT
+      campaign_id,
+      COUNT(*) FILTER (WHERE global_status IN ('sent', 'delivered', 'read'))::bigint AS enviados,
+      COUNT(*) FILTER (WHERE global_status = 'failed')::bigint AS fallidos
+    FROM estados
+    GROUP BY campaign_id
+  `)
+
+  return new Map(
+    rows.map((row) => [
+      row.campaign_id,
+      { enviados: Number(row.enviados), fallidos: Number(row.fallidos) },
+    ]),
+  )
 }
 
 export async function getCampaignContactability(

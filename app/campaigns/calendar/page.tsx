@@ -10,10 +10,13 @@ export const dynamic = 'force-dynamic'
 
 export default async function CampaignsCalendarPage() {
   const campaigns = await prisma.campaign.findMany({
-    where: { status: 'scheduled', scheduledAt: { not: null } },
+    // scheduledAt conserva la fecha original incluso después de completar o
+    // fallar el envío; así el calendario funciona también como historial.
+    where: { scheduledAt: { not: null } },
     select: {
       id: true,
       nombre: true,
+      status: true,
       scheduledAt: true,
       totalContacts: true,
       refreshOnSend: true,
@@ -25,6 +28,7 @@ export default async function CampaignsCalendarPage() {
   const data = campaigns.map((c) => ({
     id: c.id,
     nombre: c.nombre,
+    status: c.status,
     scheduledAt: c.scheduledAt!.toISOString(),
     totalContacts: c.totalContacts,
     refreshOnSend: c.refreshOnSend,
@@ -38,7 +42,7 @@ export default async function CampaignsCalendarPage() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Calendario</h1>
             <p className="mt-2 text-muted-foreground">
-              Campañas programadas pendientes de envío
+              Historial y próximas campañas programadas
             </p>
           </div>
           <Link href="/campaigns">

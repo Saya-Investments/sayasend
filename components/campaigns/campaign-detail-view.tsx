@@ -324,6 +324,8 @@ export function CampaignDetailView({
             metrics={contactability.alternate}
             errors={contactability.errors.alterno}
             errorEmptyMessage="No hay errores registrados para el teléfono secundario."
+            rateDenominator={contactability.secondarySummary.withAlternate}
+            rateDenominatorLabel="contactos con teléfono secundario"
           >
             <SecondarySummary summary={contactability.secondarySummary} />
           </ContactabilitySection>
@@ -341,6 +343,8 @@ function ContactabilitySection({
   metrics,
   errors,
   errorEmptyMessage,
+  rateDenominator,
+  rateDenominatorLabel,
   children,
 }: {
   campaignId: string
@@ -350,6 +354,8 @@ function ContactabilitySection({
   metrics: Metrics
   errors: ErrorItem[]
   errorEmptyMessage: string
+  rateDenominator?: number
+  rateDenominatorLabel?: string
   children?: ReactNode
 }) {
   return (
@@ -363,7 +369,11 @@ function ContactabilitySection({
       </div>
       {children}
       <MetricsCards metrics={metrics} />
-      <RateCards metrics={metrics} />
+      <RateCards
+        metrics={metrics}
+        denominator={rateDenominator}
+        denominatorLabel={rateDenominatorLabel}
+      />
       <ContactabilityCharts metrics={metrics} />
       <ErrorsChart errors={errors} emptyMessage={errorEmptyMessage} />
     </section>

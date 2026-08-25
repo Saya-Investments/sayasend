@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react'
 import { AppLayout } from '@/components/layout/app-layout'
 import { CampaignsList } from '@/components/campaigns/campaigns-list'
 import { Button } from '@/components/ui/button'
+import { getCampaignGlobalSendStats } from '@/lib/campaign-contactability'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -17,22 +18,9 @@ export default async function CampaignsPage() {
     orderBy: { createdAt: 'desc' },
   })
 
-  // Desglose de envíos por campaña (enviados vs fallidos) para el indicador
-  // rápido de la lista: así se ve de un vistazo si una campaña falló en masa.
-  const statusRows = await prisma.campaignContact.groupBy({
-    by: ['campaignId', 'sendStatus'],
-    _count: { _all: true },
-  })
-  const sendStats = new Map<string, { enviados: number; fallidos: number }>()
-  for (const row of statusRows) {
-    const entry = sendStats.get(row.campaignId) ?? { enviados: 0, fallidos: 0 }
-    if (['sent', 'delivered', 'read'].includes(row.sendStatus)) {
-      entry.enviados += row._count._all
-    } else if (row.sendStatus === 'failed') {
-      entry.fallidos += row._count._all
-    }
-    sendStats.set(row.campaignId, entry)
-  }
+  // La lista usa el mismo resultado final que la contactabilidad global:
+  // un fallo del principal deja de contar como fallido si el alterno lo recuperó.
+  const sendStats = await getCampaignGlobalSendStats(campaigns.map((campaign) => campaign.id))
   const campaignsWithStats = campaigns.map((c) => ({
     ...c,
     enviados: sendStats.get(c.id)?.enviados ?? 0,
