@@ -3,6 +3,7 @@
 import { Download } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import type { ContactabilityScope } from '@/lib/campaign-contactability'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,12 +27,23 @@ const OPTIONS: ExportOption[] = [
   { label: 'Solo pendientes', status: 'pending' },
 ]
 
-export function ExportCsvButton({ campaignId }: { campaignId: string }) {
+const SCOPE_LABELS: Record<ContactabilityScope, string> = {
+  global: 'global',
+  principal: 'del teléfono principal',
+  alterno: 'del teléfono secundario',
+}
+
+export function ExportCsvButton({
+  campaignId,
+  scope,
+}: {
+  campaignId: string
+  scope: ContactabilityScope
+}) {
   const handleExport = (status: string | null) => {
-    const url = status
-      ? `/api/campaigns/${campaignId}/export?status=${status}`
-      : `/api/campaigns/${campaignId}/export`
-    window.location.href = url
+    const searchParams = new URLSearchParams({ scope })
+    if (status) searchParams.set('status', status)
+    window.location.href = `/api/campaigns/${campaignId}/export?${searchParams.toString()}`
   }
 
   return (
@@ -43,7 +55,7 @@ export function ExportCsvButton({ campaignId }: { campaignId: string }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>Exportar contactos por estado</DropdownMenuLabel>
+        <DropdownMenuLabel>Contactabilidad {SCOPE_LABELS[scope]}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {OPTIONS.map((opt) => (
           <DropdownMenuItem key={opt.label} onClick={() => handleExport(opt.status)}>

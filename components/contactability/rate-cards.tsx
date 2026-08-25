@@ -15,19 +15,19 @@ export function RateCards({ metrics }: RateCardsProps) {
     {
       title: 'Tasa de Entrega',
       value: metrics.deliveryRate.toFixed(1),
-      description: `${metrics.delivered} de ${metrics.total} mensajes llegaron al destinatario (incluye los leídos)`,
+      description: `${metrics.delivered} de ${metrics.total} contactos alcanzaron entrega (incluye los leídos)`,
       color: 'text-green-600',
     },
     {
       title: 'Tasa de Lectura',
       value: metrics.readRate.toFixed(1),
-      description: `${metrics.read} de ${metrics.total} mensajes fueron leídos`,
+      description: `${metrics.read} de ${metrics.total} contactos alcanzaron lectura`,
       color: 'text-purple-600',
     },
     {
       title: 'Tasa de Fallo',
       value: metrics.failureRate.toFixed(1),
-      description: `${metrics.failed} de ${metrics.total} mensajes fallaron al enviarse`,
+      description: `${metrics.failed} de ${metrics.total} contactos fallaron al enviarse`,
       color: 'text-red-600',
     },
   ]

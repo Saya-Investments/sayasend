@@ -18,65 +18,17 @@ export type ErrorItem = {
   count: number
 }
 
-interface ErrorsChartProps {
-  principalErrors: ErrorItem[]
-  alternateErrors: ErrorItem[]
-}
-
-export function ErrorsChart({ principalErrors, alternateErrors }: ErrorsChartProps) {
-  return (
-    <section className="space-y-4">
-      <div>
-        <h3 className="text-xl font-semibold text-foreground">Errores detectados</h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Fallos registrados en cada intento de envío, separados por número.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <PhoneErrorsCard
-          title="Teléfono principal"
-          description="Primer intento con clientes.telefono"
-          emptyMessage="No hay errores registrados para el teléfono principal."
-          errors={principalErrors}
-          color="#E74C3C"
-        />
-        <PhoneErrorsCard
-          title="Teléfono alterno"
-          description="Segundo intento con clientes.telefono_3"
-          emptyMessage="No hay errores registrados para el teléfono alterno."
-          errors={alternateErrors}
-          color="#E59866"
-        />
-      </div>
-
-      <p className="text-xs text-muted-foreground italic">
-        Cada barra cuenta contactos únicos afectados, no eventos. Un contacto puede aparecer en
-        más de un código y en ambas secciones; las métricas generales conservan el resultado final
-        del contacto después de todos los intentos.
-      </p>
-    </section>
-  )
-}
-
-function PhoneErrorsCard({
-  title,
-  description,
-  emptyMessage,
+export function ErrorsChart({
   errors,
-  color,
+  emptyMessage = 'No hay errores registrados en esta contactabilidad.',
 }: {
-  title: string
-  description: string
-  emptyMessage: string
   errors: ErrorItem[]
-  color: string
+  emptyMessage?: string
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <CardTitle>Errores detectados</CardTitle>
       </CardHeader>
       <CardContent>
         {errors.length === 0 ? (
@@ -98,7 +50,7 @@ function PhoneErrorsCard({
                     `Código ${label} — ${getWhatsAppErrorDescription(label)}`
                   }
                 />
-                <Bar dataKey="count" name="Contactos" fill={color} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Contactos" fill="#E74C3C" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
 
@@ -121,6 +73,11 @@ function PhoneErrorsCard({
             </div>
           </>
         )}
+
+        <p className="text-xs text-muted-foreground mt-4 italic">
+          Cada barra cuenta contactos únicos afectados, no eventos. Un contacto puede aparecer en
+          más de un código.
+        </p>
       </CardContent>
     </Card>
   )

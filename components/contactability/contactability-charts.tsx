@@ -23,6 +23,9 @@ interface ContactabilityChartsProps {
 }
 
 export function ContactabilityCharts({ metrics }: ContactabilityChartsProps) {
+  const sentPercentage = (value: number) =>
+    metrics.sent > 0 ? ((value / metrics.sent) * 100).toFixed(1) : '0.0'
+
   // Pie chart: estados excluyentes, si no las porciones se solapan (un leído
   // también es entregado y enviado) y el pastel deja de sumar el total.
   const statusData = [
@@ -41,12 +44,12 @@ export function ContactabilityCharts({ metrics }: ContactabilityChartsProps) {
       fill: '#0084D1',
     },
     {
-      name: `Entregados ${metrics.delivered} (${((metrics.delivered / metrics.sent) * 100).toFixed(1)}%)`,
+      name: `Entregados ${metrics.delivered} (${sentPercentage(metrics.delivered)}%)`,
       value: metrics.delivered,
       fill: '#2ECC71',
     },
     {
-      name: `Leídos ${metrics.read} (${((metrics.read / metrics.sent) * 100).toFixed(1)}%)`,
+      name: `Leídos ${metrics.read} (${sentPercentage(metrics.read)}%)`,
       value: metrics.read,
       fill: '#9B59B6',
     },
@@ -102,11 +105,11 @@ export function ContactabilityCharts({ metrics }: ContactabilityChartsProps) {
                   <div
                     className="h-full flex items-center justify-center text-white text-xs font-bold transition-all"
                     style={{
-                      width: `${(item.value / metrics.sent) * 100}%`,
+                      width: `${metrics.sent > 0 ? (item.value / metrics.sent) * 100 : 0}%`,
                       backgroundColor: item.fill,
                     }}
                   >
-                    {item.value > 0 && `${((item.value / metrics.sent) * 100).toFixed(1)}%`}
+                    {item.value > 0 && `${sentPercentage(item.value)}%`}
                   </div>
                 </div>
               </div>

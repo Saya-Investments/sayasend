@@ -1,21 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import type { ContactabilityScope } from '@/lib/campaign-contactability'
+import { getCampaignContactabilityExportRows } from '@/lib/campaign-contactability-export'
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
 const ALLOWED_STATUSES = new Set(['pending', 'sent', 'delivered', 'read', 'failed'])
+const ALLOWED_SCOPES = new Set<ContactabilityScope>(['global', 'principal', 'alterno'])
 
 const CSV_HEADERS = [
   'codigoAsociado',
   'dni',
   'nombre',
-  'telefono',
+  'telefonoPrincipal',
+  'telefonoSecundario',
+  'telefonoEvaluado',
+  'origenResultado',
+  'tieneTelefonoSecundario',
+  'reintentado',
+  'estado',
   'segmento',
   'estrategia',
   'frente',
   'monto',
-  'estado',
   'sentAt',
   'deliveredAt',
   'readAt',
@@ -41,6 +49,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params
   const rawStatus = request.nextUrl.searchParams.get('status')?.trim() ?? ''
   const status = rawStatus && ALLOWED_STATUSES.has(rawStatus) ? rawStatus : null
+  const rawScope = request.nextUrl.searchParams.get('scope')?.trim() ?? 'global'
+  const scope = ALLOWED_SCOPES.has(rawScope as ContactabilityScope)
+    ? (rawScope as ContactabilityScope)
+    : 'global'
 
   const campaign = await prisma.campaign.findUnique({
     where: { id },
@@ -51,47 +63,43 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ success: false, error: 'Campaign not found' }, { status: 404 })
   }
 
-  const contacts = await prisma.campaignContact.findMany({
-    where: {
-      campaignId: id,
-      ...(status ? { sendStatus: status } : {}),
-    },
-    include: { cliente: true },
-    orderBy: { createdAt: 'asc' },
-  })
+  const contactabilityRows = await getCampaignContactabilityExportRows(id, scope)
+  const filteredRows = status
+    ? contactabilityRows.filter((row) => row.estado === status)
+    : contactabilityRows
 
-  const rows = contacts.map((cc) => {
-    const c = cc.cliente
-    const codigoAsociadoForCsv = c.codigoAsociado.replace(/,\s*/g, ' | ')
-    return [
-      codigoAsociadoForCsv,
-      c.dni,
-      c.nombre,
-      c.telefono,
-      c.segmento ?? '',
-      c.estrategia ?? '',
-      c.frente ?? '',
-      c.monto.toString(),
-      cc.sendStatus,
-      formatDate(cc.sentAt),
-      formatDate(cc.deliveredAt),
-      formatDate(cc.readAt),
-      formatDate(cc.failedAt),
-      cc.failureCode ?? '',
-      cc.failureReason ?? '',
-    ]
-  })
+  const rows = filteredRows.map((row) => [
+    row.codigoAsociado,
+    row.dni,
+    row.nombre,
+    row.telefonoPrincipal,
+    row.telefonoSecundario,
+    row.telefonoEvaluado,
+    row.origenResultado,
+    row.tieneTelefonoSecundario ? 'Sí' : 'No',
+    row.reintentado ? 'Sí' : 'No',
+    row.estado,
+    row.segmento,
+    row.estrategia,
+    row.frente,
+    row.monto,
+    formatDate(row.sentAt),
+    formatDate(row.deliveredAt),
+    formatDate(row.readAt),
+    formatDate(row.failedAt),
+    row.failureCode,
+    row.failureReason,
+  ])
 
-  const csv = [
-    CSV_HEADERS.join(','),
-    ...rows.map((row) => row.map(escapeCsv).join(',')),
-  ].join('\r\n')
+  const csv = [CSV_HEADERS.join(','), ...rows.map((row) => row.map(escapeCsv).join(','))].join(
+    '\r\n',
+  )
 
   const safeName = campaign.nombre.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 60) || 'campaign'
-  const suffix = status ? `_${status}` : '_all'
+  const suffix = status ? `_${scope}_${status}` : `_${scope}_all`
   const filename = `${safeName}${suffix}.csv`
 
-  return new NextResponse('﻿' + csv, {
+  return new NextResponse('\uFEFF' + csv, {
     status: 200,
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +20,11 @@ import { RateCards } from '@/components/contactability/rate-cards'
 import { ContactabilityCharts } from '@/components/contactability/contactability-charts'
 import { ErrorsChart, type ErrorItem } from '@/components/contactability/errors-chart'
 import { ExportCsvButton } from '@/components/contactability/export-csv-button'
+import type {
+  CampaignContactability,
+  ContactabilityScope,
+  SecondaryContactabilitySummary,
+} from '@/lib/campaign-contactability'
 import { parseFilterValue } from '@/lib/segment-filters'
 import type { ContactabilityMetrics } from '@/lib/types'
 
@@ -94,14 +99,10 @@ const CONTACT_STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default'
 
 export function CampaignDetailView({
   campaign,
-  metrics,
-  principalErrors,
-  alternateErrors,
+  contactability,
 }: {
   campaign: CampaignDetail
-  metrics: Metrics | null
-  principalErrors: ErrorItem[]
-  alternateErrors: ErrorItem[]
+  contactability: CampaignContactability | null
 }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0])
@@ -289,21 +290,128 @@ export function CampaignDetailView({
         </CardContent>
       </Card>
 
-      {metrics && (
+      {contactability && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-foreground">Contactabilidad</h2>
-            <ExportCsvButton campaignId={campaign.id} />
           </div>
-          <MetricsCards metrics={metrics} />
-          <RateCards metrics={metrics} />
-          <ContactabilityCharts metrics={metrics} />
-          <ErrorsChart
-            principalErrors={principalErrors}
-            alternateErrors={alternateErrors}
+
+          <ContactabilitySection
+            campaignId={campaign.id}
+            exportScope="global"
+            title="Contactabilidad global"
+            description="Resultado final de cada contacto después de considerar el teléfono principal y, cuando correspondió, el secundario. Cada contacto cuenta una sola vez."
+            metrics={contactability.global}
+            errors={contactability.errors.global}
+            errorEmptyMessage="No hay errores finales sin recuperar en esta campaña."
           />
+
+          <ContactabilitySection
+            campaignId={campaign.id}
+            exportScope="principal"
+            title="Contactabilidad del teléfono principal"
+            description="Resultado del primer intento realizado con clientes.telefono para todos los contactos de la campaña."
+            metrics={contactability.principal}
+            errors={contactability.errors.principal}
+            errorEmptyMessage="No hay errores registrados para el teléfono principal."
+          />
+
+          <ContactabilitySection
+            campaignId={campaign.id}
+            exportScope="alterno"
+            title="Contactabilidad del teléfono secundario"
+            description="Parte de los contactos que fallaron con el teléfono principal. Los casos sin teléfono secundario o todavía no reintentados permanecen pendientes en este bloque."
+            metrics={contactability.alternate}
+            errors={contactability.errors.alterno}
+            errorEmptyMessage="No hay errores registrados para el teléfono secundario."
+          >
+            <SecondarySummary summary={contactability.secondarySummary} />
+          </ContactabilitySection>
         </div>
       )}
+    </div>
+  )
+}
+
+function ContactabilitySection({
+  campaignId,
+  exportScope,
+  title,
+  description,
+  metrics,
+  errors,
+  errorEmptyMessage,
+  children,
+}: {
+  campaignId: string
+  exportScope: ContactabilityScope
+  title: string
+  description: string
+  metrics: Metrics
+  errors: ErrorItem[]
+  errorEmptyMessage: string
+  children?: ReactNode
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-muted/20 p-5 md:p-6 space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-xl font-bold text-foreground">{title}</h3>
+          <p className="text-sm text-muted-foreground mt-1">{description}</p>
+        </div>
+        <ExportCsvButton campaignId={campaignId} scope={exportScope} />
+      </div>
+      {children}
+      <MetricsCards metrics={metrics} />
+      <RateCards metrics={metrics} />
+      <ContactabilityCharts metrics={metrics} />
+      <ErrorsChart errors={errors} emptyMessage={errorEmptyMessage} />
+    </section>
+  )
+}
+
+function SecondarySummary({ summary }: { summary: SecondaryContactabilitySummary }) {
+  if (summary.eligible === 0) {
+    return (
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+        No hubo fallidos en el teléfono principal, así que no fue necesario buscar teléfonos
+        secundarios.
+      </div>
+    )
+  }
+
+  const items = [
+    { label: 'Fallidos del principal', value: summary.eligible },
+    { label: 'Con teléfono secundario', value: summary.withAlternate },
+    { label: 'Sin teléfono secundario', value: summary.withoutAlternate },
+    { label: 'Reintentados', value: summary.retried },
+    { label: 'Con secundario sin reintento', value: summary.notRetried },
+  ]
+
+  return (
+    <div className="space-y-3">
+      {summary.withAlternate === 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          Esta campaña no tiene teléfonos secundarios disponibles para los contactos que fallaron
+          en el primer intento.
+        </div>
+      )}
+      {summary.withAlternate > 0 && summary.notRetried > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          Hay {summary.notRetried} contacto{summary.notRetried === 1 ? '' : 's'} con teléfono
+          secundario disponible cuyo reintento todavía no está registrado.
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+        {items.map((item) => (
+          <Card key={item.label}>
+            <CardContent className="pt-5 text-center">
+              <p className="text-2xl font-bold text-foreground">{item.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{item.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   )
 }
