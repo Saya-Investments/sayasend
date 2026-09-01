@@ -383,10 +383,8 @@ export async function queryBigQueryContactsCobranza(
         ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
       CROSS JOIN ciclo_siguiente sig
       CROSS JOIN ciclo_anterior ant
-      WHERE (
-          src.\`Fec_Ult_Pag_CCAP\` IS NULL
-          OR src.\`Fec_Ult_Pag_CCAP\` < ciclo.fecha_inicio_ciclo
-        )
+      WHERE src.\`Fec_Ult_Pag_CCAP\` IS NOT NULL
+        AND src.\`Fec_Ult_Pag_CCAP\` < sig.fecha_inicio_siguiente
         ${whereClause}
       QUALIFY ROW_NUMBER() OVER (
         PARTITION BY CAST(src.\`Contrato\` AS STRING)
@@ -592,10 +590,8 @@ export async function queryBigQueryContacts(
       JOIN ciclo_activo ciclo
         ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
       CROSS JOIN ciclo_siguiente sig
-      WHERE (
-          src.\`Fec_Ult_Pag_CCAP\` IS NULL
-          OR src.\`Fec_Ult_Pag_CCAP\` < ciclo.fecha_inicio_ciclo
-        )
+      WHERE src.\`Fec_Ult_Pag_CCAP\` IS NOT NULL
+        AND src.\`Fec_Ult_Pag_CCAP\` < sig.fecha_inicio_siguiente
         ${whereClause}
       QUALIFY ROW_NUMBER() OVER (
         PARTITION BY CAST(src.\`Contrato\` AS STRING)
