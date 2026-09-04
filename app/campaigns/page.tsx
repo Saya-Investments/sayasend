@@ -4,28 +4,27 @@ import { Plus } from 'lucide-react'
 import { AppLayout } from '@/components/layout/app-layout'
 import { CampaignsList } from '@/components/campaigns/campaigns-list'
 import { Button } from '@/components/ui/button'
-import { getCampaignGlobalSendStats } from '@/lib/campaign-contactability'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
 export default async function CampaignsPage() {
+  // Solo las columnas que pinta la tabla. El conteo de contactos sale de
+  // total_contacts (ya guardado en la fila) en vez de un _count por campaña.
+  // Las métricas de envío las pide la lista por página vía /api/campaigns/stats:
+  // calcularlas acá para todas las campañas hacía que la página tardara
+  // segundos y se cayera por timeout.
   const campaigns = await prisma.campaign.findMany({
-    include: {
+    select: {
+      id: true,
+      nombre: true,
+      status: true,
+      totalContacts: true,
+      createdAt: true,
       template: { select: { nombre: true } },
-      _count: { select: { campaignContacts: true } },
     },
     orderBy: { createdAt: 'desc' },
   })
-
-  // La lista usa el mismo resultado final que la contactabilidad global:
-  // un fallo del principal deja de contar como fallido si el alterno lo recuperó.
-  const sendStats = await getCampaignGlobalSendStats(campaigns.map((campaign) => campaign.id))
-  const campaignsWithStats = campaigns.map((c) => ({
-    ...c,
-    enviados: sendStats.get(c.id)?.enviados ?? 0,
-    fallidos: sendStats.get(c.id)?.fallidos ?? 0,
-  }))
 
   return (
     <AppLayout>
@@ -45,7 +44,7 @@ export default async function CampaignsPage() {
           </Link>
         </div>
 
-        <CampaignsList campaigns={campaignsWithStats} />
+        <CampaignsList campaigns={campaigns} />
       </div>
     </AppLayout>
   )

@@ -157,6 +157,7 @@ export async function getCampaignGlobalSendStats(
         END AS phone_kind
       FROM sayasend.mensaje_out mo
       JOIN contactos c ON c.id = mo.campaign_contact_id
+      WHERE mo.campaign_id IN (${Prisma.join(campaignIds.map((id) => Prisma.sql`${id}::uuid`))})
     ),
     estado_por_mensaje AS (
       SELECT

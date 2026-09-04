@@ -120,6 +120,18 @@ export async function deleteCampaign(campaignId: string) {
   })
 }
 
+export type CampaignSendStats = { enviados: number; fallidos: number }
+
+/**
+ * Métricas de envío de un puñado de campañas (las visibles en la tabla).
+ */
+export async function getCampaignSendStats(ids: string[]) {
+  return internalApiCall<Record<string, CampaignSendStats>>('/api/campaigns/stats', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  })
+}
+
 /**
  * Fetch templates from Cloud Run
  */

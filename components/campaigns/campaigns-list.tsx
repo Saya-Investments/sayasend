@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -27,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { deleteCampaign } from '@/lib/api'
+import { deleteCampaign, getCampaignSendStats, type CampaignSendStats } from '@/lib/api'
 
 type CampaignRow = {
   id: string
@@ -36,9 +36,6 @@ type CampaignRow = {
   totalContacts: number
   createdAt: Date | string
   template: { nombre: string } | null
-  _count?: { campaignContacts: number }
-  enviados?: number
-  fallidos?: number
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -79,6 +76,39 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
   const currentPage = Math.min(page, totalPages)
   const startIndex = (currentPage - 1) * PAGE_SIZE
   const pageItems = filtered.slice(startIndex, startIndex + PAGE_SIZE)
+
+  // Las métricas de envío se piden solo para las filas visibles y se guardan
+  // para no volver a pedirlas al navegar entre páginas.
+  const [stats, setStats] = useState<Record<string, CampaignSendStats>>({})
+  const requestedRef = useRef<Set<string>>(new Set())
+  const visibleKey = pageItems.map((c) => c.id).join(',')
+
+  useEffect(() => {
+    const missing = (visibleKey ? visibleKey.split(',') : []).filter(
+      (id) => !requestedRef.current.has(id),
+    )
+    if (missing.length === 0) return
+
+    missing.forEach((id) => requestedRef.current.add(id))
+
+    getCampaignSendStats(missing).then((result) => {
+      if (!result.success || !result.data) {
+        // Se permite reintentar cuando el usuario vuelva a esta página.
+        missing.forEach((id) => requestedRef.current.delete(id))
+        return
+      }
+
+      const data = result.data
+      // Una campaña sin contactos no vuelve en la respuesta: se fija en cero
+      // para que la fila deje de mostrarse como "cargando".
+      setStats((prev) => ({
+        ...prev,
+        ...Object.fromEntries(
+          missing.map((id) => [id, data[id] ?? { enviados: 0, fallidos: 0 }]),
+        ),
+      }))
+    })
+  }, [visibleKey])
 
   const handleDelete = async (campaign: CampaignRow) => {
     const warning =
@@ -166,13 +196,17 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
                       {STATUS_LABEL[campaign.status] ?? campaign.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
-                    {campaign._count?.campaignContacts ?? campaign.totalContacts}
-                  </TableCell>
+                  <TableCell className="text-right">{campaign.totalContacts}</TableCell>
                   <TableCell className="text-center">
                     {(() => {
-                      const enviados = campaign.enviados ?? 0
-                      const fallidos = campaign.fallidos ?? 0
+                      const row = stats[campaign.id]
+                      if (!row) {
+                        return (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground mx-auto" />
+                        )
+                      }
+
+                      const { enviados, fallidos } = row
                       const procesados = enviados + fallidos
                       if (procesados === 0) {
                         return <span className="text-muted-foreground text-sm">—</span>
