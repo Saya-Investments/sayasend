@@ -72,6 +72,12 @@ function construirQuery(tableName, filtros) {
       WHERE CURRENT_DATE('America/Bogota') BETWEEN fecha_inicio_ciclo AND fecha_fin_ciclo
       QUALIFY ROW_NUMBER() OVER (ORDER BY fecha_inicio_ciclo DESC) = 1
     ),
+    ciclo_siguiente AS (
+      SELECT fecha_inicio_ciclo AS fecha_inicio_siguiente
+      FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.ciclos_pago\`
+      WHERE fecha_inicio_ciclo > (SELECT fecha_fin_ciclo FROM ciclo_activo)
+      QUALIFY ROW_NUMBER() OVER (ORDER BY fecha_inicio_ciclo ASC) = 1
+    ),
     snap_dedup AS (
       SELECT *
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.BDfondos_snapshots\`
@@ -87,9 +93,19 @@ function construirQuery(tableName, filtros) {
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\` src
       JOIN ciclo_activo ciclo
         ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
+      CROSS JOIN ciclo_siguiente sig
       WHERE (
-          src.\`Fec_Ult_Pag_CCAP\` IS NULL
-          OR src.\`Fec_Ult_Pag_CCAP\` < ciclo.fecha_inicio_ciclo
+          CASE
+            WHEN CAST(src.\`Frente\` AS STRING) = 'Admision Inaugural'
+              THEN (
+                src.\`Fec_Ult_Pag_CCAP\` IS NOT NULL
+                AND src.\`Fec_Ult_Pag_CCAP\` < sig.fecha_inicio_siguiente
+              )
+            ELSE (
+              src.\`Fec_Ult_Pag_CCAP\` IS NULL
+              OR src.\`Fec_Ult_Pag_CCAP\` < ciclo.fecha_inicio_ciclo
+            )
+          END
         )
         ${whereClause}
       QUALIFY ROW_NUMBER() OVER (

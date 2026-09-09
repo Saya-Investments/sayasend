@@ -9,6 +9,32 @@ const TABLE_NAME_PATTERN = /^[A-Za-z0-9_]+$/
 
 const RETENCION_RETADOR_PHONES: Record<string, string> = retencionRetadorPhones
 
+// Filtro por fecha de último pago. Se evalúa fila por fila, según el frente del
+// contrato, porque las dos reglas conviven:
+//
+// - Admisión Inaugural: entra quien tenga un pago registrado anterior al inicio
+//   del ciclo siguiente. Es un corte laxo — en la práctica no excluye a nadie
+//   que ya haya pagado alguna vez — y es el comportamiento que ese frente pidió.
+// - Resto de frentes (Fidelización, Retención, Admisión, M1/M2/M3): entra solo
+//   quien AÚN NO ha pagado la cuota del ciclo vigente, es decir sin pago
+//   registrado o con el último pago anterior al inicio del ciclo actual. Si el
+//   asociado paga durante el ciclo, sale del universo y deja de recibir envíos.
+//
+// El CASE manda un `Frente` NULL al ELSE, que es la regla estricta.
+const FILTRO_PAGO_POR_FRENTE = `(
+          CASE
+            WHEN CAST(src.\`Frente\` AS STRING) = 'Admision Inaugural'
+              THEN (
+                src.\`Fec_Ult_Pag_CCAP\` IS NOT NULL
+                AND src.\`Fec_Ult_Pag_CCAP\` < sig.fecha_inicio_siguiente
+              )
+            ELSE (
+              src.\`Fec_Ult_Pag_CCAP\` IS NULL
+              OR src.\`Fec_Ult_Pag_CCAP\` < ciclo.fecha_inicio_ciclo
+            )
+          END
+        )`
+
 type BigQueryCredentialShape = {
   project_id?: string
   private_key?: string
@@ -383,8 +409,7 @@ export async function queryBigQueryContactsCobranza(
         ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
       CROSS JOIN ciclo_siguiente sig
       CROSS JOIN ciclo_anterior ant
-      WHERE src.\`Fec_Ult_Pag_CCAP\` IS NOT NULL
-        AND src.\`Fec_Ult_Pag_CCAP\` < sig.fecha_inicio_siguiente
+      WHERE ${FILTRO_PAGO_POR_FRENTE}
         ${whereClause}
       QUALIFY ROW_NUMBER() OVER (
         PARTITION BY CAST(src.\`Contrato\` AS STRING)
@@ -590,8 +615,7 @@ export async function queryBigQueryContacts(
       JOIN ciclo_activo ciclo
         ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
       CROSS JOIN ciclo_siguiente sig
-      WHERE src.\`Fec_Ult_Pag_CCAP\` IS NOT NULL
-        AND src.\`Fec_Ult_Pag_CCAP\` < sig.fecha_inicio_siguiente
+      WHERE ${FILTRO_PAGO_POR_FRENTE}
         ${whereClause}
       QUALIFY ROW_NUMBER() OVER (
         PARTITION BY CAST(src.\`Contrato\` AS STRING)
