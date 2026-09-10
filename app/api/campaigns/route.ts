@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { freezeCampaignContacts } from '@/lib/campaign-contacts'
+import { applyManualDates, normalizeManualDates } from '@/lib/manual-dates'
 import { prisma } from '@/lib/prisma'
 import { serializeFilterValue } from '@/lib/segment-filters'
 import type { CreateCampaignPayload, GestionType } from '@/lib/types'
@@ -22,6 +23,32 @@ function normalizeTemplateId(templateId?: string | null) {
 
 function normalizeGestionType(value: unknown): GestionType | null {
   return value === 'gestion_cobranza' || value === 'gestion_m0' ? value : null
+}
+
+// "YYYY-MM-DD" -> Date en UTC, que es como Prisma guarda las columnas @db.Date
+// sin correr un día por zona horaria.
+function toUtcDate(value: string | null) {
+  if (!value) {
+    return null
+  }
+
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day))
+}
+
+// Distingue "no vino" de "vino mal escrita": lo primero es válido (se usa la
+// fecha de BigQuery), lo segundo debe rechazarse en vez de ignorarse en silencio.
+function findInvalidManualDate(dates: CreateCampaignPayload['manualDates']) {
+  const raw = [
+    ['fecha de vencimiento', dates?.fechaVencimiento] as const,
+    ['fecha de asamblea', dates?.fechaAsamblea] as const,
+  ]
+
+  const invalid = raw.find(
+    ([, value]) => value != null && String(value).trim() !== '' && !normalizeManualDates({ fechaVencimiento: value }).fechaVencimiento,
+  )
+
+  return invalid?.[0] ?? null
 }
 
 export async function POST(request: NextRequest) {
@@ -57,6 +84,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const invalidManualDate = findInvalidManualDate(body.manualDates)
+    if (invalidManualDate) {
+      return NextResponse.json(
+        { success: false, error: `La ${invalidManualDate} manual no es una fecha válida (formato YYYY-MM-DD)` },
+        { status: 400 },
+      )
+    }
+
+    // Las fechas manuales pisan lo que BigQuery derivó de `ciclos_pago`. Se
+    // aplican aquí (además del formulario) para que queden guardadas en
+    // `clientes` venga de donde venga la request.
+    const manualDates = normalizeManualDates(body.manualDates)
+    const contacts = applyManualDates(body.contacts, manualDates)
+
     const isExcelSource = body.databaseName.trim().startsWith('EXCEL:')
     const gestionType = normalizeGestionType(body.gestionType)
     // Solo BigQuery puede refrescarse el día del envío; un Excel no se puede
@@ -75,10 +116,14 @@ export async function POST(request: NextRequest) {
           frenteFilter: serializeFilterValue(body.segmentFilters.frente),
           rangoMontoFilter: serializeFilterValue(body.segmentFilters.rangoMonto),
           variableMappings: body.variableMappings ?? {},
-          totalContacts: body.contacts.length,
+          totalContacts: contacts.length,
           status: 'draft',
           refreshOnSend,
           gestionType,
+          // Se guardan en la campaña para poder re-aplicarlas si el scheduler
+          // vuelve a consultar BigQuery el día del envío.
+          fechaVencimientoManual: toUtcDate(manualDates.fechaVencimiento ?? null),
+          fechaAsambleaManual: toUtcDate(manualDates.fechaAsamblea ?? null),
         }
 
         const campaign = await tx.campaign.create({ data: campaignData })
@@ -86,7 +131,13 @@ export async function POST(request: NextRequest) {
         // Siempre congelamos un snapshot inicial — así se muestra el total real
         // al programar. Si refreshOnSend es true, el scheduler reemplazará estos
         // contactos con la base del día de envío.
-        await freezeCampaignContacts(tx, campaign.id, body.contacts, { isExcelSource })
+        await freezeCampaignContacts(tx, campaign.id, contacts, {
+          isExcelSource,
+          overwriteFields: [
+            ...(manualDates.fechaVencimiento ? (['fechaVencimiento'] as const) : []),
+            ...(manualDates.fechaAsamblea ? (['fechaAsamblea'] as const) : []),
+          ],
+        })
 
         return campaign
       },

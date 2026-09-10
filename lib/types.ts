@@ -125,4 +125,14 @@ export interface CreateCampaignPayload {
   // "Usar base actualizada del día de envío": si es true, el scheduler
   // re-consulta BigQuery el día del envío en vez de usar la foto de creación.
   refreshOnSend?: boolean
+  // Fechas manuales ("YYYY-MM-DD"): si vienen, sobrescriben la fecha que
+  // BigQuery derivó de `ciclos_pago` para todos los contactos de la campaña.
+  manualDates?: ManualCampaignDates
+}
+
+// Sobrescritura manual de fechas. Cada campo es "YYYY-MM-DD" o null (= usar el
+// valor que trae el contacto desde BigQuery/Excel).
+export interface ManualCampaignDates {
+  fechaVencimiento?: string | null
+  fechaAsamblea?: string | null
 }

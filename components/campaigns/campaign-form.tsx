@@ -14,6 +14,7 @@ import {
   getBigQueryRangoMontos,
 } from '@/lib/api'
 import { parseContactsExcel } from '@/lib/excel-contacts'
+import { applyManualDates, normalizeManualDate } from '@/lib/manual-dates'
 import type {
   BigQueryColumn,
   BigQueryContactsPayload,
@@ -119,6 +120,11 @@ export function CampaignForm() {
   const [contactsPage, setContactsPage] = useState(1)
   const [activeGestionType, setActiveGestionType] = useState<'gestion_m0' | 'gestion_cobranza' | null>(null)
   const [refreshOnSend, setRefreshOnSend] = useState(false)
+  // Fechas manuales: reemplazan la fecha de vencimiento / asamblea que BigQuery
+  // deriva de `ciclos_pago` para todos los contactos de la campaña.
+  const [useManualDates, setUseManualDates] = useState(false)
+  const [manualFechaVencimiento, setManualFechaVencimiento] = useState('')
+  const [manualFechaAsamblea, setManualFechaAsamblea] = useState('')
   const [isLoadingDatabases, setIsLoadingDatabases] = useState(true)
   const [isLoadingContacts, setIsLoadingContacts] = useState(false)
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false)
@@ -140,7 +146,39 @@ export function CampaignForm() {
     () => (currentTemplate ? extractTemplateVariables(currentTemplate.contenido) : []),
     [currentTemplate],
   )
-  const filteredContacts = contactsPayload.contacts
+  // Las fechas manuales se aplican acá, no solo al enviar: así la tabla de
+  // clientes y la vista previa del mensaje muestran exactamente lo que se va a
+  // guardar y a enviar.
+  const manualDates = useMemo(
+    () =>
+      useManualDates
+        ? {
+            fechaVencimiento: normalizeManualDate(manualFechaVencimiento),
+            fechaAsamblea: normalizeManualDate(manualFechaAsamblea),
+          }
+        : null,
+    [useManualDates, manualFechaVencimiento, manualFechaAsamblea],
+  )
+  const filteredContacts = useMemo(
+    () => applyManualDates(contactsPayload.contacts, manualDates),
+    [contactsPayload.contacts, manualDates],
+  )
+  // Un Excel sin columna de fechas no las expone para el mapeo de variables.
+  // Si el usuario las fijó a mano, los contactos sí las llevan, así que hay que
+  // ofrecerlas igual para que la plantilla pueda usarlas como {{n}}.
+  const mappableColumns = useMemo(() => {
+    const columns = [...availableColumns]
+    const ensureColumn = (name: string) => {
+      if (!columns.some((column) => column.name === name)) {
+        columns.push({ name, type: 'DATE' })
+      }
+    }
+
+    if (manualDates?.fechaVencimiento) ensureColumn('fechaVencimiento')
+    if (manualDates?.fechaAsamblea) ensureColumn('fechaAsamblea')
+
+    return columns
+  }, [availableColumns, manualDates])
   const contactsWithoutPhone = filteredContacts.filter(
     (contact) => !contact.telefono || String(contact.telefono).trim() === '',
   ).length
@@ -265,6 +303,9 @@ export function CampaignForm() {
     setContactsPage(1)
     setExcelFileName('')
     setExcelWarnings([])
+    setUseManualDates(false)
+    setManualFechaVencimiento('')
+    setManualFechaAsamblea('')
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -308,6 +349,7 @@ export function CampaignForm() {
       ...(foundOptionalColumns.includes('nombre') ? [{ name: 'nombre', type: 'STRING' }] : []),
       ...(foundOptionalColumns.includes('monto') ? [{ name: 'monto', type: 'FLOAT' }] : []),
       ...(foundOptionalColumns.includes('fechaVencimiento') ? [{ name: 'fechaVencimiento', type: 'DATE' }] : []),
+      ...(foundOptionalColumns.includes('fechaAsamblea') ? [{ name: 'fechaAsamblea', type: 'DATE' }] : []),
     ]
 
     setExcelFileName(file.name)
@@ -415,6 +457,13 @@ export function CampaignForm() {
       return
     }
 
+    if (useManualDates && !manualDates?.fechaVencimiento && !manualDates?.fechaAsamblea) {
+      setErrorMessage(
+        'Ingresa al menos una fecha manual válida o desactiva las fechas manuales.',
+      )
+      return
+    }
+
     setIsCreatingCampaign(true)
     setErrorMessage('')
     setSuccessMessage('')
@@ -437,6 +486,7 @@ export function CampaignForm() {
       contacts: filteredContacts,
       gestionType: source === 'bigquery' ? activeGestionType ?? undefined : undefined,
       refreshOnSend: source === 'bigquery' ? refreshOnSend : false,
+      manualDates: manualDates ?? undefined,
     }
 
     const response = await createCampaign(payload)
@@ -466,7 +516,8 @@ export function CampaignForm() {
     (source === 'bigquery' ? !!databaseName : !!excelFileName) &&
     filteredContacts.length > 0 &&
     (!needsTemplateMappings ||
-      Object.keys(variableMappings).length === currentVariables.length)
+      Object.keys(variableMappings).length === currentVariables.length) &&
+    (!useManualDates || !!manualDates?.fechaVencimiento || !!manualDates?.fechaAsamblea)
 
   return (
     <div className="space-y-8">
@@ -656,11 +707,19 @@ export function CampaignForm() {
                   disabled={isParsingExcel}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Columnas obligatorias: <span className="font-mono">Num Doc</span> (o DNI, Cédula…) y{' '}
-                  <span className="font-mono">Telefono</span> (o Celular, Movil…).{' '}
+                  Columnas obligatorias: <span className="font-mono">Num Doc</span> (o DNI, Cédula…),{' '}
+                  <span className="font-mono">Codigo Asociado</span> y{' '}
+                  <span className="font-mono">Telefono</span> (o Celular, Movil, Telefono 2…).{' '}
                   Columnas opcionales: <span className="font-mono">Nombre</span>,{' '}
-                  <span className="font-mono">Monto</span> y{' '}
-                  <span className="font-mono">Fecha Vencimiento</span> — si están presentes se guardarán en la BD.
+                  <span className="font-mono">Monto</span>,{' '}
+                  <span className="font-mono">Fecha Vencimiento</span> y{' '}
+                  <span className="font-mono">Fecha Asamblea</span> — si están presentes se guardarán en la BD.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Las fechas deben venir con formato de fecha de Excel o como texto{' '}
+                  <span className="font-mono">YYYY-MM-DD</span>. Otros formatos (por ejemplo{' '}
+                  <span className="font-mono">31/12/2026</span> escrito como texto) se guardan vacíos.
+                  También puedes fijarlas a mano para todo el archivo con el botón de fechas manuales.
                 </p>
               </div>
 
@@ -691,6 +750,65 @@ export function CampaignForm() {
           {successMessage && <p className="text-sm text-green-600">{successMessage}</p>}
         </CardContent>
       </Card>
+
+      {showContacts && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle>Fechas de Vencimiento y Asamblea</CardTitle>
+                <CardDescription>
+                  {source === 'excel'
+                    ? 'Por defecto se toman de las columnas del Excel, si las trae. Puedes fijarlas manualmente para toda la campaña.'
+                    : 'Por defecto se toman de los ciclos de pago de BigQuery. Puedes fijarlas manualmente para toda la campaña.'}
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant={useManualDates ? 'default' : 'outline'}
+                onClick={() => {
+                  setUseManualDates((previous) => !previous)
+                  setErrorMessage('')
+                }}
+              >
+                {useManualDates ? 'Usar fechas de BigQuery' : 'Ingresar fechas manualmente'}
+              </Button>
+            </div>
+          </CardHeader>
+          {useManualDates && (
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="manual-fecha-vencimiento">Fecha de Vencimiento</Label>
+                  <Input
+                    id="manual-fecha-vencimiento"
+                    type="date"
+                    value={manualFechaVencimiento}
+                    onChange={(event) => setManualFechaVencimiento(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="manual-fecha-asamblea">Fecha de Asamblea</Label>
+                  <Input
+                    id="manual-fecha-asamblea"
+                    type="date"
+                    value={manualFechaAsamblea}
+                    onChange={(event) => setManualFechaAsamblea(event.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                La fecha que dejes en blanco conserva el valor de origen
+                {source === 'excel' ? ' del Excel' : ' de BigQuery'}. Las fechas que
+                ingreses se guardan en la base de datos para todos los clientes de la
+                campaña, quedan disponibles para mapearlas como variable de la
+                plantilla y se aplican también si activas “usar base actualizada del
+                día de envío”.
+              </p>
+            </CardContent>
+          )}
+        </Card>
+      )}
 
       {showContacts && (
         <Card>
@@ -963,7 +1081,7 @@ export function CampaignForm() {
                               <SelectValue placeholder="Selecciona una columna" />
                             </SelectTrigger>
                             <SelectContent>
-                              {availableColumns.map((column) => (
+                              {mappableColumns.map((column) => (
                                 <SelectItem key={column.name} value={column.name}>
                                   {column.name}
                                 </SelectItem>

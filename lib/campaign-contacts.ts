@@ -168,6 +168,10 @@ type FreezeOptions = {
   // Si es true, borra los campaign_contacts previos de la campaña antes de
   // volver a vincular (usado al re-consultar la base el día del envío).
   replace?: boolean
+  // Campos que deben sobreescribirse aunque el origen sea Excel. Se usa para
+  // las fechas manuales: si el usuario las escribió a mano, mandan sobre lo que
+  // ya hubiera en `clientes`, en vez de quedar descartadas por el fill-only.
+  overwriteFields?: Array<'fechaAsamblea' | 'fechaVencimiento'>
 }
 
 /**
@@ -183,7 +187,7 @@ export async function freezeCampaignContacts(
   contacts: CampaignContact[],
   options: FreezeOptions,
 ): Promise<number> {
-  const { isExcelSource, replace = false } = options
+  const { isExcelSource, replace = false, overwriteFields = [] } = options
 
   if (replace) {
     await tx.campaignContact.deleteMany({ where: { campaignId } })
@@ -245,6 +249,11 @@ export async function freezeCampaignContacts(
         // sin pisar la data buena ya cargada (p. ej. desde BigQuery).
         const existing = existingById.get(existingId)
         const fill = existing ? buildFillOnlyData(existing, data) : {}
+        for (const field of overwriteFields) {
+          if (data[field]) {
+            fill[field] = data[field]
+          }
+        }
         if (Object.keys(fill).length > 0) {
           toUpdate.push({ id: existingId, data: fill })
         }

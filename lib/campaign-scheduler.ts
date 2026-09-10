@@ -1,6 +1,9 @@
+import { Prisma } from '@prisma/client'
+
 import { queryBigQueryContacts, queryBigQueryContactsCobranza } from '@/lib/bigquery'
 import { freezeCampaignContacts } from '@/lib/campaign-contacts'
 import { sendCampaignFailedEmail } from '@/lib/email'
+import { applyManualDates } from '@/lib/manual-dates'
 import { prisma } from '@/lib/prisma'
 import { parseFilterValue } from '@/lib/segment-filters'
 
@@ -40,6 +43,46 @@ type DueCampaign = {
   segmentoFilter: string | null
   estrategiaFilter: string | null
   frenteFilter: string | null
+  fechaVencimientoManual: Date | null
+  fechaAsambleaManual: Date | null
+}
+
+// Date (columna @db.Date, guardada en UTC) -> "YYYY-MM-DD", el formato que
+// esperan los contactos.
+function toDateString(value: Date | null) {
+  return value ? value.toISOString().slice(0, 10) : null
+}
+
+/**
+ * Reescribe las fechas manuales de la campaña sobre sus clientes, justo antes
+ * de disparar el envío.
+ *
+ * Hace falta porque `clientes` es una tabla global compartida entre campañas:
+ * entre la creación de una campaña programada y su envío, otra campaña puede
+ * haber tocado los mismos clientes desde BigQuery y pisado la fecha que el
+ * usuario fijó a mano. El motor de envío arma los {{n}} leyendo `clientes`, así
+ * que esta pasada es la que garantiza que el mensaje salga con la fecha manual.
+ *
+ * Es idempotente y no hace nada si la campaña no tiene fechas manuales.
+ */
+async function applyManualDatesToClientes(campaign: DueCampaign): Promise<void> {
+  const data: Prisma.ClienteUncheckedUpdateManyInput = {}
+
+  if (campaign.fechaVencimientoManual) {
+    data.fechaVencimiento = campaign.fechaVencimientoManual
+  }
+  if (campaign.fechaAsambleaManual) {
+    data.fechaAsamblea = campaign.fechaAsambleaManual
+  }
+
+  if (Object.keys(data).length === 0) {
+    return
+  }
+
+  await prisma.cliente.updateMany({
+    where: { campaignContacts: { some: { campaignId: campaign.id } } },
+    data,
+  })
 }
 
 // Para campañas con "base actualizada del día de envío": re-consulta BigQuery
@@ -61,7 +104,12 @@ async function refreshCampaignContacts(campaign: DueCampaign): Promise<number> {
       ? await queryBigQueryContactsCobranza(campaign.databaseName, filters)
       : await queryBigQueryContacts(campaign.databaseName, filters)
 
-  const contacts = payload.contacts
+  // La base es nueva, pero las fechas que el usuario fijó a mano al crear la
+  // campaña siguen mandando sobre las que BigQuery deriva de `ciclos_pago`.
+  const contacts = applyManualDates(payload.contacts, {
+    fechaVencimiento: toDateString(campaign.fechaVencimientoManual),
+    fechaAsamblea: toDateString(campaign.fechaAsambleaManual),
+  })
 
   const linked = await prisma.$transaction(
     async (tx) => {
@@ -101,6 +149,8 @@ export async function sendDueScheduledCampaigns(limit = 5) {
       segmentoFilter: true,
       estrategiaFilter: true,
       frenteFilter: true,
+      fechaVencimientoManual: true,
+      fechaAsambleaManual: true,
     },
   })
 
@@ -154,6 +204,10 @@ export async function sendDueScheduledCampaigns(limit = 5) {
           continue
         }
       }
+
+      // Siempre, con o sin refresco: las fechas manuales mandan sobre lo que
+      // haya quedado en `clientes` desde que se creó la campaña.
+      await applyManualDatesToClientes(campaign)
 
       await triggerCampaignSend(campaign.id)
       results.push({ campaignId: campaign.id, status: 'sent' })

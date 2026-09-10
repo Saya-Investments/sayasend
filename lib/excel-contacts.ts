@@ -34,7 +34,8 @@ const NUM_DOC_ALIASES = [
   'id',
 ]
 
-const TELEFONO_ALIASES = [
+// Nombres base de la columna de teléfono, en orden de preferencia.
+const TELEFONO_BASES = [
   'nro. telefonico',
   'nro telefonico',
   'nro. telefónico',
@@ -65,6 +66,16 @@ const TELEFONO_ALIASES = [
   'nro. movil',
   'contacto',
 ]
+
+// Las bases de datos suelen traer la columna numerada (`Telefono 2`,
+// `Telefono_3`, `Celular2`...). Generamos las variantes en vez de listarlas a
+// mano: primero la columna sin número, y después 1, 2, 3 y 4 — ese orden es el
+// de preferencia cuando el archivo trae varias.
+const TELEFONO_SUFIJOS = ['', ' 1', '1', '_1', ' 2', '2', '_2', ' 3', '3', '_3', ' 4', '4', '_4']
+
+const TELEFONO_ALIASES = TELEFONO_SUFIJOS.flatMap((sufijo) =>
+  TELEFONO_BASES.map((base) => `${base}${sufijo}`),
+)
 
 const CODIGO_ASOCIADO_ALIASES = [
   'codigo asociado',
@@ -125,6 +136,20 @@ const FECHA_VENCIMIENTO_ALIASES = [
   'due date',
 ]
 
+const FECHA_ASAMBLEA_ALIASES = [
+  'fecha asamblea',
+  'fecha de asamblea',
+  'fec asamblea',
+  'fec. asamblea',
+  'fecha_asamblea',
+  'fecha asamb',
+  'fec asamb',
+  'fec. asamb',
+  'f. asamblea',
+  'f asamblea',
+  'asamblea',
+]
+
 function normalizeHeader(value: unknown): string {
   return String(value ?? '')
     .trim()
@@ -132,11 +157,15 @@ function normalizeHeader(value: unknown): string {
     .replace(/\s+/g, ' ')
 }
 
+// Recorre los alias en su orden, no las columnas del archivo: manda la
+// preferencia de la lista. Así un Excel con `Telefono 2` y `Telefono` usa
+// `Telefono` aunque aparezca más a la derecha.
 function findHeaderIndex(headers: string[], aliases: string[]): number {
   const normalized = headers.map(normalizeHeader)
-  for (let i = 0; i < normalized.length; i++) {
-    if (aliases.includes(normalized[i])) {
-      return i
+  for (const alias of aliases) {
+    const index = normalized.indexOf(alias)
+    if (index !== -1) {
+      return index
     }
   }
   return -1
@@ -212,6 +241,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
     const nombreIdx = findHeaderIndex(headerRow, NOMBRE_ALIASES)
     const montoIdx = findHeaderIndex(headerRow, MONTO_ALIASES)
     const fechaVencimientoIdx = findHeaderIndex(headerRow, FECHA_VENCIMIENTO_ALIASES)
+    const fechaAsambleaIdx = findHeaderIndex(headerRow, FECHA_ASAMBLEA_ALIASES)
 
     if (numDocIdx === -1) {
       return {
@@ -236,6 +266,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
     if (nombreIdx !== -1) foundOptionalColumns.push('nombre')
     if (montoIdx !== -1) foundOptionalColumns.push('monto')
     if (fechaVencimientoIdx !== -1) foundOptionalColumns.push('fechaVencimiento')
+    if (fechaAsambleaIdx !== -1) foundOptionalColumns.push('fechaAsamblea')
 
     const contacts: CampaignContact[] = []
     const warnings: string[] = []
@@ -267,6 +298,7 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
         monto: montoIdx !== -1 ? parseMonto(row[montoIdx]) : 0,
         fechaUltimoPago: null,
         fechaVencimiento: fechaVencimientoIdx !== -1 ? parseFecha(row[fechaVencimientoIdx]) : null,
+        fechaAsamblea: fechaAsambleaIdx !== -1 ? parseFecha(row[fechaAsambleaIdx]) : null,
       })
     }
 
