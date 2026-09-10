@@ -2,13 +2,14 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, RefreshCw, Trash2, Loader2, Upload, ImageIcon, Search } from 'lucide-react'
+import { Plus, RefreshCw, Trash2, Loader2, Upload, ImageIcon, Search, FileSpreadsheet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { CreateTemplateDialog } from './create-template-dialog'
+import { BulkUploadTemplatesDialog } from './bulk-upload-dialog'
 
 type TemplateRow = {
   id: string
@@ -48,6 +49,7 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
   const router = useRouter()
   const [syncing, setSyncing] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null,
   )
@@ -182,6 +184,10 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
               <RefreshCw className="w-4 h-4" />
             )}
             Sincronizar con Meta
+          </Button>
+          <Button onClick={() => setBulkDialogOpen(true)} variant="outline" className="gap-2">
+            <FileSpreadsheet className="w-4 h-4" />
+            Cargar desde Excel
           </Button>
           <Button onClick={() => setDialogOpen(true)} className="gap-2">
             <Plus className="w-4 h-4" />
@@ -357,6 +363,12 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
           })
           router.refresh()
         }}
+      />
+
+      <BulkUploadTemplatesDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        onFinished={() => router.refresh()}
       />
 
       {/* Input oculto compartido por todos los botones de "subir/reemplazar imagen" */}
