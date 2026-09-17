@@ -405,7 +405,7 @@ export function BulkUploadTemplatesDialog({ open, onOpenChange, onFinished }: Pr
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground mt-1 break-words">
+                          <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap break-words">
                             {row.mensaje || '(sin mensaje)'}
                           </p>
                           {row.ejemplosMensaje.length > 0 && (
