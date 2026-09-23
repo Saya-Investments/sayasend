@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
 
+import { NavbarUser } from './navbar-user'
+
 export function Navbar() {
   return (
     <div className="border-b border-border bg-card">
@@ -20,6 +22,7 @@ export function Navbar() {
             <span className="text-xs text-muted-foreground">Campaign Manager</span>
           </div>
         </Link>
+        <NavbarUser />
       </div>
     </div>
   )
