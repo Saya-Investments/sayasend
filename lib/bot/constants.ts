@@ -27,7 +27,7 @@ export function rangoScore(score: number, motivoPrincipal?: string | null) {
 
 export const ESTADO_CONV_LABEL: Record<string, { label: string; ayuda: string }> = {
   SIN_INTERACCION: { label: 'Sin interacción', ayuda: 'Nunca contestó' },
-  CONFORME: { label: 'Conforme', ayuda: 'Contestó y solo acusó recibo' },
+  CONFORME: { label: 'Conforme', ayuda: 'Contestó y solo confirmó que recibió el mensaje' },
   CONFORME_INCIDENCIA_RESUELTA: { label: 'Conforme, temas resueltos', ayuda: 'Trajo temas y todos se cerraron' },
   INCONFORME_CON_DUDA: { label: 'Con duda abierta', ayuda: 'Le quedó una pregunta sin resolver' },
   INCONFORME_CON_RECLAMO: { label: 'Con reclamo abierto', ayuda: 'Le quedó un reclamo o un retiro sin resolver' },
@@ -50,6 +50,16 @@ export const ESTADO_INCIDENCIA_LABEL: Record<string, string> = {
   RESUELTA_HUMANO: 'Resuelta por el asesor',
   ABANDONADA: 'Abandonada',
   NO_RESUELTA_CIERRE: 'Sin resolver al cierre',
+}
+
+// Motivos del ledger del score (edu_score_evento.motivo), en palabras.
+export const MOTIVO_SCORE_LABEL: Record<string, string> = {
+  ARRASTRE_ETAPA: 'Arrastre de la etapa anterior',
+  APERTURA_INCIDENCIA: 'Abrió un tema',
+  INCIDENCIA_RESUELTA: 'Tema resuelto',
+  RESOLUCION_HUMANA: 'Lo resolvió el asesor',
+  ACUSE: 'Confirma',
+  TONO: 'Tono del mensaje',
 }
 
 // Por qué llegó al asesor. RETIRO va primero siempre.

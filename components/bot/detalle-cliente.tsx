@@ -1,7 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { label, MOTIVO_DERIVACION_LABEL } from '@/lib/bot/constants'
+import { label, MOTIVO_DERIVACION_LABEL, MOTIVO_SCORE_LABEL } from '@/lib/bot/constants'
 import type { DetalleCliente } from '@/lib/bot/queries'
 import {
   CategoriaBadge,
@@ -185,7 +185,7 @@ export function DetalleBloques({ d, onCambio }: { d: DetalleCliente; onCambio: (
             {d.ledger.map((s) => (
               <li key={s.eventoId} className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span className="flex items-center gap-2">
-                  <span className="font-medium">{label(s.motivo)}</span>
+                  <span className="font-medium">{MOTIVO_SCORE_LABEL[s.motivo] ?? label(s.motivo)}</span>
                   {s.grupo && <span className="text-xs text-muted-foreground">{s.grupo.replace(/_/g, ' ')}</span>}
                 </span>
                 <span className="flex items-center gap-3 font-mono text-xs">
