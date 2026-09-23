@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { DetalleCliente } from '@/lib/bot/queries'
 import { EstadoConvBadge, EtapaBadge, ScoreBadge } from './badges'
 import { DetalleBloques, GestionesBloque } from './detalle-cliente'
+import { usePolling } from './auto-refresh'
 import { FichaChat } from './ficha-chat'
 import { telefonoLegible } from './formato'
 
@@ -37,6 +38,9 @@ export function FichaCliente({ etapaUuid, volverHref, volverLabel }: Props) {
   useEffect(() => {
     cargar()
   }, [cargar])
+
+  // El bot sigue conversando mientras el asesor mira la ficha: se recarga sola.
+  usePolling(cargar, 15_000)
 
   return (
     <div className="space-y-6">

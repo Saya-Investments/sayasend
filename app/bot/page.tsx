@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppLayout } from '@/components/layout/app-layout'
 import { BotAdminTabs } from '@/components/bot/bot-admin-tabs'
 import { CentroTareas } from '@/components/bot/centro-tareas'
+import { AutoRefresh } from '@/components/bot/auto-refresh'
 import { getSesion } from '@/lib/auth/server'
 import { resumenTareas } from '@/lib/bot/queries'
 
@@ -34,6 +35,7 @@ export default async function BotAdminPage() {
         </div>
         <BotAdminTabs />
 
+        <AutoRefresh />
         <CentroTareas
           resumen={resumen}
           hrefBase="/bot/clientes"

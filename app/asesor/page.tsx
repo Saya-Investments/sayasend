@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 
 import { CentroTareas } from '@/components/bot/centro-tareas'
+import { AutoRefresh } from '@/components/bot/auto-refresh'
 import { getSesion } from '@/lib/auth/server'
 import { resumenTareas } from '@/lib/bot/queries'
 
@@ -23,6 +24,7 @@ export default async function AsesorTareasPage() {
 
   return (
     <div className="space-y-6">
+      <AutoRefresh />
       <CentroTareas resumen={resumen} hrefBase="/asesor/clientes" fecha={fecha} />
       <p className="text-sm text-muted-foreground">
         Entra a una caja para ver los clientes con ese tipo de tarea pendiente. Los retiros son los primeros que hay

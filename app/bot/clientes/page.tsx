@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { BotAdminTabs } from '@/components/bot/bot-admin-tabs'
 import { ClientesTable } from '@/components/bot/clientes-table'
 import { FiltrosClientes } from '@/components/bot/filtros-clientes'
+import { AutoRefresh } from '@/components/bot/auto-refresh'
 import { getSesion } from '@/lib/auth/server'
 import { listarAsesoresActivos } from '@/lib/bot/asesores'
 import { filtrosDesdeParams, type ParamsClientes } from '@/lib/bot/filtros'
@@ -35,6 +36,7 @@ export default async function BotClientesAdminPage({ searchParams }: Props) {
           </p>
         </div>
         <BotAdminTabs />
+        <AutoRefresh />
         <FiltrosClientes asesores={asesores} />
         <ClientesTable clientes={clientes} hrefBase="/bot/clientes" mostrarAsesor asesores={asesores} />
       </div>

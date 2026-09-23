@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import type { MensajeBot } from '@/lib/bot/queries'
+import { usePolling } from './auto-refresh'
 import { fechaHora } from './formato'
 
 const POLL_MS = 5000
@@ -37,9 +38,9 @@ export function FichaChat({ etapaUuid }: { etapaUuid: string }) {
 
   useEffect(() => {
     cargar()
-    const t = setInterval(cargar, POLL_MS)
-    return () => clearInterval(t)
   }, [cargar])
+
+  usePolling(cargar, POLL_MS)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })

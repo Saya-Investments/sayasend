@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { DetalleCliente } from '@/lib/bot/queries'
 import { EtapaBadge, ScoreBadge } from './badges'
 import { DetalleBloques, GestionesBloque } from './detalle-cliente'
+import { usePolling } from './auto-refresh'
 import { FichaChat } from './ficha-chat'
 import { telefonoLegible } from './formato'
 
@@ -93,6 +94,9 @@ function ClientePanel({
   useEffect(() => {
     cargar()
   }, [cargar])
+
+  // El bot sigue conversando mientras el asesor mira la ficha: se recarga sola.
+  usePolling(cargar, 15_000)
 
   const abiertos = detalle?.incidencias.filter((i) => i.derivadaEn && !i.atendidaEn).length ?? 0
 

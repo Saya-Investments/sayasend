@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 
 import { ClientesTable } from '@/components/bot/clientes-table'
 import { FiltrosClientes } from '@/components/bot/filtros-clientes'
+import { AutoRefresh } from '@/components/bot/auto-refresh'
 import { getSesion } from '@/lib/auth/server'
 import { listarClientesBot } from '@/lib/bot/queries'
 import { filtrosDesdeParams, type ParamsClientes } from '@/lib/bot/filtros'
@@ -31,6 +32,7 @@ export default async function AsesorClientesPage({ searchParams }: Props) {
             : 'Clientes que tienes asignados, con su etapa en curso. Los retiros y los scores más bajos van primero.'}
         </p>
       </div>
+      <AutoRefresh />
       <FiltrosClientes />
       <ClientesTable clientes={clientes} hrefBase="/asesor/clientes" />
     </div>
