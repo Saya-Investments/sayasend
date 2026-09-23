@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import type { Sesion } from '@/lib/auth/session'
-import { PREFIJO_PRUEBA } from '@/lib/bot/constants'
+import { PREFIJO_PRUEBA, RESULTADOS_ACCION, TIPOS_ACCION } from '@/lib/bot/constants'
 
 // Últimos 10 dígitos: Meta guarda '573102022107', clientes '3102022107'.
 const tel10 = (col: Prisma.Sql) => Prisma.sql`right(regexp_replace(${col}, '[^0-9]', '', 'g'), 10)`
@@ -434,40 +434,172 @@ export async function mensajesDeCliente(clienteId: string, telefono: string, lim
 
 export type MensajeBot = Awaited<ReturnType<typeof mensajesDeCliente>>[number]
 
-// ---------------------------------------------------------------------------
-// Métricas del piloto (admin). Excluyen los clientes de prueba.
 
-export async function metricasPiloto() {
-  const [etapas] = await prisma.$queryRaw<Array<Record<string, number>>>`
+// ---------------------------------------------------------------------------
+// Dashboard de gestiones del asesor (crm_acciones) y resumen de categorías del
+// bot. Los dos aceptan un rango de fechas; el rango se resuelve en la página.
+
+export type RangoFechas = { desde?: string; hasta?: string }
+
+// Rango -> condición SQL sobre una columna timestamptz. `hasta` es inclusivo.
+function entreFechas(col: Prisma.Sql, { desde, hasta }: RangoFechas) {
+  const partes: Prisma.Sql[] = []
+  if (desde) partes.push(Prisma.sql`${col} >= ${`${desde} 00:00:00-05`}::timestamptz`)
+  if (hasta) partes.push(Prisma.sql`${col} <= ${`${hasta} 23:59:59-05`}::timestamptz`)
+  return partes.length > 0 ? Prisma.join(partes, ' AND ') : Prisma.sql`true`
+}
+
+export type DashboardGestiones = {
+  total: number
+  hoy: number
+  promedioDia: number
+  clientes: number
+  asesoresActivos: number
+  porResultado: Array<{ clave: string; label: string; total: number }>
+  porTipo: Array<{ clave: string; label: string; total: number }>
+  porDia: Array<{ fecha: string; total: number }>
+  porAsesor: Array<{ asesor: string; total: number }>
+  ultimas: Array<{
+    id: string
+    fecha: string
+    asesor: string
+    cliente: string
+    etapaUuid: string
+    tipo: string
+    resultado: string
+    observaciones: string | null
+  }>
+}
+
+export async function dashboardGestiones(
+  rango: RangoFechas,
+  opciones: { asesorId?: string } = {},
+): Promise<DashboardGestiones> {
+  const where: Prisma.Sql[] = [entreFechas(Prisma.sql`a.created_at`, rango)]
+  if (opciones.asesorId) where.push(Prisma.sql`a.id_usuario = ${opciones.asesorId}::uuid`)
+  const filtro = Prisma.join(where, ' AND ')
+
+  const [totales] = await prisma.$queryRaw<Array<Record<string, number>>>`
     SELECT
       count(*)::int AS total,
-      count(*) FILTER (WHERE v.etapa::text = 'PRE')::int AS pre,
-      count(*) FILTER (WHERE v.etapa::text = 'ADM')::int AS adm,
-      count(*) FILTER (WHERE v.score_actual < 30)::int AS riesgo,
-      count(*) FILTER (WHERE v.score_actual >= 30 AND v.score_actual < 50)::int AS inconforme,
-      count(*) FILTER (WHERE v.score_actual >= 50 AND v.score_actual < 70)::int AS neutro,
-      count(*) FILTER (WHERE v.score_actual >= 70)::int AS conforme,
-      count(*) FILTER (WHERE v.motivo_principal = 'retiro')::int AS retiros,
-      COALESCE(round(avg(v.score_actual), 1), 0)::float8 AS score_promedio,
-      count(*) FILTER (WHERE NOT v.tuvo_interaccion)::int AS sin_interaccion
-    FROM sayasend.edu_estado_actual v
-    WHERE v.codigo_asociado NOT ILIKE ${'%' + PREFIJO_PRUEBA + '%'}
+      count(*) FILTER (WHERE a.created_at::date = (now() AT TIME ZONE 'America/Bogota')::date)::int AS hoy,
+      count(DISTINCT a.etapa_id)::int AS clientes,
+      count(DISTINCT a.id_usuario)::int AS asesores,
+      count(DISTINCT a.created_at::date)::int AS dias
+    FROM sayasend.crm_acciones a
+    WHERE ${filtro}
   `
-  const [derivaciones] = await prisma.$queryRaw<Array<Record<string, number>>>`
-    SELECT
-      count(*) FILTER (WHERE i.atendida_en IS NULL AND (i.agendada_para IS NULL OR i.agendada_para <= now()))::int AS pendientes,
-      count(*) FILTER (WHERE i.atendida_en IS NULL AND i.motivo_derivacion = 'RETIRO')::int AS retiros,
-      count(*) FILTER (WHERE i.atendida_en IS NULL AND i.agendada_para > now())::int AS agendadas,
-      count(*) FILTER (WHERE i.atendida_en IS NULL AND asig.id_asesor IS NULL)::int AS sin_asignar,
-      count(*) FILTER (WHERE i.atendida_en >= now() - interval '7 days')::int AS atendidas_7d
+  const porResultado = await prisma.$queryRaw<Array<Record<string, unknown>>>`
+    SELECT a.resultado AS clave, count(*)::int AS total
+    FROM sayasend.crm_acciones a
+    WHERE ${filtro}
+    GROUP BY 1
+    ORDER BY 2 DESC
+  `
+  const porTipo = await prisma.$queryRaw<Array<Record<string, unknown>>>`
+    SELECT a.tipo AS clave, count(*)::int AS total
+    FROM sayasend.crm_acciones a
+    WHERE ${filtro}
+    GROUP BY 1
+    ORDER BY 2 DESC
+  `
+  const porDia = await prisma.$queryRaw<Array<Record<string, unknown>>>`
+    SELECT (a.created_at AT TIME ZONE 'America/Bogota')::date AS fecha, count(*)::int AS total
+    FROM sayasend.crm_acciones a
+    WHERE ${filtro}
+    GROUP BY 1
+    ORDER BY 1
+  `
+  const porAsesor = await prisma.$queryRaw<Array<Record<string, unknown>>>`
+    SELECT u.nombre AS asesor, count(*)::int AS total
+    FROM sayasend.crm_acciones a
+    JOIN sayasend.crm_usuarios u ON u.id_usuario = a.id_usuario
+    WHERE ${filtro}
+    GROUP BY 1
+    ORDER BY 2 DESC
+  `
+  const ultimas = await prisma.$queryRaw<Array<Record<string, unknown>>>`
+    SELECT a.id, a.created_at, a.tipo, a.resultado, a.observaciones,
+           u.nombre AS asesor, c.nombre AS cliente, a.etapa_id
+    FROM sayasend.crm_acciones a
+    JOIN sayasend.crm_usuarios u ON u.id_usuario = a.id_usuario
+    JOIN sayasend.edu_etapa_cliente e ON e.etapa_uuid = a.etapa_id
+    JOIN sayasend.clientes c ON c.id = e.cliente_id
+    WHERE ${filtro}
+    ORDER BY a.created_at DESC
+    LIMIT 25
+  `
+
+  const dias = Number(totales?.dias ?? 0)
+  const total = Number(totales?.total ?? 0)
+
+  return {
+    total,
+    hoy: Number(totales?.hoy ?? 0),
+    // Promedio por día con gestiones: dividir por los días del rango daría casi
+    // siempre 0 en un piloto que todavía no gestiona todos los días.
+    promedioDia: dias > 0 ? Math.round((total / dias) * 10) / 10 : 0,
+    clientes: Number(totales?.clientes ?? 0),
+    asesoresActivos: Number(totales?.asesores ?? 0),
+    porResultado: porResultado.map((r) => ({
+      clave: String(r.clave),
+      label: RESULTADOS_ACCION.find((x) => x.value === r.clave)?.label ?? String(r.clave),
+      total: Number(r.total),
+    })),
+    porTipo: porTipo.map((r) => ({
+      clave: String(r.clave),
+      label: TIPOS_ACCION.find((x) => x.value === r.clave)?.label ?? String(r.clave),
+      total: Number(r.total),
+    })),
+    porDia: porDia.map((r) => ({ fecha: fechaSolo(r.fecha as Date)!, total: Number(r.total) })),
+    porAsesor: porAsesor.map((r) => ({ asesor: String(r.asesor), total: Number(r.total) })),
+    ultimas: ultimas.map((r) => ({
+      id: String(r.id),
+      fecha: iso(r.created_at as Date)!,
+      asesor: String(r.asesor),
+      cliente: String(r.cliente ?? ''),
+      etapaUuid: String(r.etapa_id),
+      tipo: TIPOS_ACCION.find((x) => x.value === r.tipo)?.label ?? String(r.tipo),
+      resultado: RESULTADOS_ACCION.find((x) => x.value === r.resultado)?.label ?? String(r.resultado),
+      observaciones: (r.observaciones as string | null) ?? null,
+    })),
+  }
+}
+
+// Cuántos temas trajo el cliente, por tipo y por categoría del bot.
+export type ResumenCategorias = {
+  total: number
+  porCategoria: Record<string, number>
+  porTipo: Record<string, number>
+}
+
+export async function resumenCategorias(
+  rango: RangoFechas,
+  opciones: { etapa?: string } = {},
+): Promise<ResumenCategorias> {
+  const where: Prisma.Sql[] = [entreFechas(Prisma.sql`i.abierta_en`, rango)]
+  if (opciones.etapa) where.push(Prisma.sql`e.etapa::text = ${opciones.etapa}`)
+
+  const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>`
+    SELECT i.categoria, i.tipo, count(*)::int AS total
     FROM sayasend.edu_incidencia i
     JOIN sayasend.edu_etapa_cliente e USING (etapa_cliente_id)
     JOIN sayasend.clientes c ON c.id = e.cliente_id
-    LEFT JOIN sayasend.crm_asignacion asig ON asig.etapa_id = e.etapa_uuid
-    WHERE i.derivada_en IS NOT NULL
+    WHERE ${Prisma.join(where, ' AND ')}
       AND c.codigo_asociado NOT ILIKE ${'%' + PREFIJO_PRUEBA + '%'}
+    GROUP BY 1, 2
   `
-  return { etapas, derivaciones }
+
+  const porCategoria: Record<string, number> = {}
+  const porTipo: Record<string, number> = {}
+  let total = 0
+  for (const r of rows) {
+    const n = Number(r.total)
+    porCategoria[String(r.categoria)] = (porCategoria[String(r.categoria)] ?? 0) + n
+    porTipo[String(r.tipo ?? 'OTROS')] = (porTipo[String(r.tipo ?? 'OTROS')] ?? 0) + n
+    total += n
+  }
+  return { total, porCategoria, porTipo }
 }
 
 // ---------------------------------------------------------------------------

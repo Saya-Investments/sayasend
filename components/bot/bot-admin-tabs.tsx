@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 const TABS = [
   { href: '/bot', label: 'Tareas', exacto: true },
   { href: '/bot/clientes', label: 'Clientes del bot', exacto: false },
+  { href: '/bot/dashboard', label: 'Dashboard', exacto: false },
   { href: '/bot/metricas', label: 'Métricas', exacto: false },
 ]
 
