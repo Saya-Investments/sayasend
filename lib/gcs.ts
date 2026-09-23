@@ -65,9 +65,7 @@ export async function uploadImage(
   const bucketName = getBucketName()
   const bucket = storage.bucket(bucketName)
 
-  const sanitized = originalName.replace(/[^a-zA-Z0-9.\-_]/g, '_')
-  const timestamp = Date.now()
-  const objectPath = `${folder}/${timestamp}-${sanitized}`
+  const objectPath = buildObjectPath(originalName, folder)
 
   const file = bucket.file(objectPath)
   await file.save(buffer, {
@@ -78,6 +76,72 @@ export async function uploadImage(
 
   const publicUrl = `https://storage.googleapis.com/${bucketName}/${objectPath}`
   return { publicUrl, objectPath }
+}
+
+/**
+ * Construye el objectPath que se usaría para un archivo, sin subir nada.
+ * Se usa en el flujo de signed URL, donde el path se decide antes del upload.
+ */
+export function buildObjectPath(originalName: string, folder = 'templates'): string {
+  const sanitized = originalName.replace(/[^a-zA-Z0-9.\-_]/g, '_')
+  return `${folder}/${Date.now()}-${sanitized}`
+}
+
+/** URL pública de un objeto del bucket (el bucket es público a nivel IAM). */
+export function publicUrlFor(objectPath: string): string {
+  return `https://storage.googleapis.com/${getBucketName()}/${objectPath}`
+}
+
+/**
+ * Genera una signed URL v4 de escritura para que el navegador suba el archivo
+ * DIRECTO a GCS con un PUT, sin pasar por el backend.
+ *
+ * Esto existe por el límite de 4.5MB que Vercel impone al body de un route
+ * handler: un video de header (hasta 16MB según Meta) nunca podría viajar como
+ * multipart hacia /api/templates. El navegador sube a GCS, el backend después
+ * baja los bytes con downloadObject() y recién ahí se los pasa a Meta.
+ *
+ * Requiere que el bucket tenga CORS habilitado para PUT desde el origen de la app.
+ */
+export async function createSignedUploadUrl(
+  objectPath: string,
+  contentType: string,
+  expiresInMinutes = 15,
+): Promise<{ uploadUrl: string; objectPath: string; publicUrl: string }> {
+  const storage = getStorage()
+  const file = storage.bucket(getBucketName()).file(objectPath)
+
+  const [uploadUrl] = await file.getSignedUrl({
+    version: 'v4',
+    action: 'write',
+    expires: Date.now() + expiresInMinutes * 60 * 1000,
+    contentType,
+  })
+
+  return { uploadUrl, objectPath, publicUrl: publicUrlFor(objectPath) }
+}
+
+/**
+ * Baja un objeto del bucket a memoria. Se usa para reenviar a Meta un archivo
+ * que el navegador ya subió con signed URL.
+ */
+export async function downloadObject(
+  objectPath: string,
+): Promise<{ buffer: Buffer; contentType: string; size: number }> {
+  const storage = getStorage()
+  const file = storage.bucket(getBucketName()).file(objectPath)
+
+  const [exists] = await file.exists()
+  if (!exists) throw new Error(`El objeto "${objectPath}" no existe en el bucket`)
+
+  const [metadata] = await file.getMetadata()
+  const [buffer] = await file.download()
+
+  return {
+    buffer,
+    contentType: metadata.contentType ?? 'application/octet-stream',
+    size: Number(metadata.size ?? buffer.length),
+  }
 }
 
 /**

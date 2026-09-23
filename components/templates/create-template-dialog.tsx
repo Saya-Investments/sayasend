@@ -23,7 +23,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-type HeaderType = 'NONE' | 'TEXT' | 'IMAGE'
+import {
+  MEDIA_HEADER_RULES,
+  isMediaHeaderType,
+  validateMediaFile,
+  type MediaHeaderType,
+} from '@/lib/template-media'
+import { uploadTemplateMedia } from '@/lib/upload-template-media'
+
+type HeaderType = 'NONE' | 'TEXT' | MediaHeaderType
 
 type Props = {
   open: boolean
@@ -33,6 +41,7 @@ type Props = {
 
 export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
   const [loading, setLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const [nombre, setNombre] = useState('')
@@ -44,9 +53,12 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
   const [header, setHeader] = useState('')
   const [footer, setFooter] = useState('')
   const [ejemplosTexto, setEjemplosTexto] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [mediaFile, setMediaFile] = useState<File | null>(null)
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const mediaHeaderType = isMediaHeaderType(headerType) ? headerType : null
+  const mediaRules = mediaHeaderType ? MEDIA_HEADER_RULES[mediaHeaderType] : null
 
   const reset = () => {
     setNombre('')
@@ -58,47 +70,55 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
     setHeader('')
     setFooter('')
     setEjemplosTexto('')
-    setImageFile(null)
-    setImagePreview(null)
+    setMediaFile(null)
+    setMediaPreview(null)
+    setError(null)
+  }
+
+  // Cambiar el tipo de header invalida el archivo elegido (un MP4 no sirve
+  // para un header IMAGE y viceversa).
+  const handleHeaderTypeChange = (value: HeaderType) => {
+    setHeaderType(value)
+    clearMedia()
     setError(null)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) {
-      setImageFile(null)
-      setImagePreview(null)
+    if (!file || !mediaHeaderType) {
+      setMediaFile(null)
+      setMediaPreview(null)
       return
     }
 
-    // Validaciones básicas cliente-side
-    if (!file.type.startsWith('image/')) {
-      setError('El archivo debe ser una imagen (JPEG, PNG, WebP)')
-      return
-    }
-    if (file.size > 4 * 1024 * 1024) {
-      setError('La imagen no puede pesar más de 4MB')
+    // Validaciones cliente-side (las mismas que corre la API)
+    const invalid = validateMediaFile(mediaHeaderType, file.type, file.size)
+    if (invalid) {
+      setError(invalid)
       return
     }
 
     setError(null)
-    setImageFile(file)
-    const reader = new FileReader()
-    reader.onload = () => setImagePreview(reader.result as string)
-    reader.readAsDataURL(file)
+    setMediaFile(file)
+    // objectURL en vez de FileReader: un video de 16MB en base64 sería enorme
+    // y bloquearía el render.
+    setMediaPreview(URL.createObjectURL(file))
   }
 
-  const clearImage = () => {
-    setImageFile(null)
-    setImagePreview(null)
+  const clearMedia = () => {
+    setMediaPreview((current) => {
+      if (current?.startsWith('blob:')) URL.revokeObjectURL(current)
+      return null
+    })
+    setMediaFile(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (headerType === 'IMAGE' && !imageFile) {
-      setError('Cuando el header es IMAGE, hay que subir una imagen')
+    if (mediaHeaderType && !mediaFile) {
+      setError(`Cuando el header es ${mediaHeaderType}, hay que subir un ${mediaRules?.label}`)
       return
     }
 
@@ -110,6 +130,16 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
         .map((s) => s.trim())
         .filter(Boolean)
 
+      // El archivo va primero directo a GCS (signed URL). Recién después se
+      // crea la template mandando solo el objectPath, así el body del POST
+      // queda chico y no choca con el límite de 4.5MB de Vercel.
+      let headerObjectPath: string | null = null
+      if (mediaHeaderType && mediaFile) {
+        setUploadProgress(`Subiendo ${mediaRules?.label} a Cloud Storage…`)
+        headerObjectPath = (await uploadTemplateMedia(mediaFile, mediaHeaderType)).objectPath
+        setUploadProgress('Creando la plantilla en Meta…')
+      }
+
       const templateData = {
         nombre,
         mensaje,
@@ -118,26 +148,16 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
         idioma,
         headerType,
         header: headerType === 'TEXT' ? header || null : null,
+        headerObjectPath,
         footer: footer || null,
         ejemplos_mensaje: ejemplos_mensaje.length > 0 ? ejemplos_mensaje : undefined,
       }
 
-      let response: Response
-
-      if (headerType === 'IMAGE' && imageFile) {
-        // Multipart: enviar JSON como campo "data" + archivo como "image"
-        const form = new FormData()
-        form.append('data', JSON.stringify(templateData))
-        form.append('image', imageFile)
-        response = await fetch('/api/templates', { method: 'POST', body: form })
-      } else {
-        // JSON normal
-        response = await fetch('/api/templates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(templateData),
-        })
-      }
+      const response = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(templateData),
+      })
 
       const result = await response.json()
       if (!result.success) throw new Error(result.error ?? 'Error creando plantilla')
@@ -147,6 +167,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
       setLoading(false)
+      setUploadProgress(null)
     }
   }
 
@@ -207,7 +228,10 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
 
           <div className="space-y-2">
             <Label htmlFor="headerType">Tipo de header</Label>
-            <Select value={headerType} onValueChange={(v) => setHeaderType(v as HeaderType)}>
+            <Select
+              value={headerType}
+              onValueChange={(v) => handleHeaderTypeChange(v as HeaderType)}
+            >
               <SelectTrigger id="headerType">
                 <SelectValue />
               </SelectTrigger>
@@ -215,6 +239,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
                 <SelectItem value="NONE">Sin header</SelectItem>
                 <SelectItem value="TEXT">Texto</SelectItem>
                 <SelectItem value="IMAGE">Imagen</SelectItem>
+                <SelectItem value="VIDEO">Video</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -231,25 +256,40 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
             </div>
           )}
 
-          {headerType === 'IMAGE' && (
+          {mediaHeaderType && mediaRules && (
             <div className="space-y-2">
-              <Label htmlFor="image">Imagen del header *</Label>
-              {imagePreview ? (
+              <Label htmlFor="media">
+                {mediaHeaderType === 'VIDEO' ? 'Video' : 'Imagen'} del header *
+              </Label>
+              {mediaPreview ? (
                 <div className="relative rounded-md border border-border overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imagePreview} alt="preview" className="max-h-48 w-full object-contain bg-muted" />
+                  {mediaHeaderType === 'VIDEO' ? (
+                    <video
+                      src={mediaPreview}
+                      controls
+                      className="max-h-48 w-full object-contain bg-muted"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={mediaPreview}
+                      alt="preview"
+                      className="max-h-48 w-full object-contain bg-muted"
+                    />
+                  )}
                   <Button
                     type="button"
                     size="sm"
                     variant="destructive"
-                    onClick={clearImage}
+                    onClick={clearMedia}
                     className="absolute top-2 right-2 gap-1"
                   >
                     <X className="w-3 h-3" />
                     Quitar
                   </Button>
                   <p className="p-2 text-xs text-muted-foreground bg-muted/50">
-                    {imageFile?.name} · {imageFile ? (imageFile.size / 1024).toFixed(0) : 0} KB
+                    {mediaFile?.name} ·{' '}
+                    {mediaFile ? (mediaFile.size / 1024 / 1024).toFixed(2) : 0} MB
                   </p>
                 </div>
               ) : (
@@ -261,23 +301,21 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
                     onClick={() => fileInputRef.current?.click()}
                     size="sm"
                   >
-                    Seleccionar imagen
+                    Seleccionar {mediaRules.label}
                   </Button>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    JPEG, PNG o WebP. Máximo 4MB.
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">{mediaRules.hint}</p>
                 </div>
               )}
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept={mediaRules.mimeTypes.join(',')}
                 onChange={handleFileChange}
                 className="hidden"
               />
               <p className="text-xs text-muted-foreground">
-                Esta imagen se sube a Google Cloud Storage y se usará como cabecera cuando
-                envíes esta plantilla. Meta también la revisará para aprobar la plantilla.
+                El archivo se sube a Google Cloud Storage (para poder verlo desde el CRM) y
+                también a Meta, que lo revisa para aprobar la plantilla.
               </p>
             </div>
           )}
@@ -330,6 +368,13 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
             />
           </div>
 
+          {uploadProgress && (
+            <div className="p-3 rounded-md border border-border bg-muted text-sm flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {uploadProgress}
+            </div>
+          )}
+
           {error && (
             <div className="p-3 rounded-md border border-destructive/20 bg-destructive/10 text-sm text-destructive">
               {error}
@@ -351,7 +396,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: Props) {
                 loading ||
                 !nombre ||
                 !mensaje ||
-                (headerType === 'IMAGE' && !imageFile)
+                (mediaHeaderType !== null && !mediaFile)
               }
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}

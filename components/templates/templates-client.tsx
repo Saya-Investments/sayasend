@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, RefreshCw, Trash2, Loader2, Upload, ImageIcon, Search, FileSpreadsheet } from 'lucide-react'
+import { Plus, RefreshCw, Trash2, Loader2, Upload, ImageIcon, Video, Search, FileSpreadsheet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +10,13 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { CreateTemplateDialog } from './create-template-dialog'
 import { BulkUploadTemplatesDialog } from './bulk-upload-dialog'
+import {
+  MEDIA_HEADER_RULES,
+  isMediaHeaderType,
+  validateMediaFile,
+  type MediaHeaderType,
+} from '@/lib/template-media'
+import { uploadTemplateMedia } from '@/lib/upload-template-media'
 
 type TemplateRow = {
   id: string
@@ -57,6 +64,9 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
   const [query, setQuery] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const pendingUploadIdRef = useRef<string | null>(null)
+  const pendingUploadTypeRef = useRef<MediaHeaderType>('IMAGE')
+  // El accept del input cambia según qué plantilla se esté editando
+  const [acceptedMimes, setAcceptedMimes] = useState(MEDIA_HEADER_RULES.IMAGE.mimeTypes.join(','))
 
   const normalizedQuery = query.trim().toLowerCase()
   const filteredTemplates = normalizedQuery
@@ -68,41 +78,47 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
       )
     : initialTemplates
 
-  const handleOpenUpload = (templateId: string) => {
+  const handleOpenUpload = (templateId: string, mediaType: MediaHeaderType) => {
     pendingUploadIdRef.current = templateId
-    fileInputRef.current?.click()
+    pendingUploadTypeRef.current = mediaType
+    setAcceptedMimes(MEDIA_HEADER_RULES[mediaType].mimeTypes.join(','))
+    // El accept se acaba de setear, así que el click va en el siguiente tick
+    // para que el diálogo del SO ya filtre por el tipo correcto.
+    setTimeout(() => fileInputRef.current?.click(), 0)
   }
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     const templateId = pendingUploadIdRef.current
+    const mediaType = pendingUploadTypeRef.current
     // reset para permitir re-seleccionar el mismo archivo después
     if (fileInputRef.current) fileInputRef.current.value = ''
     if (!file || !templateId) return
 
-    if (!file.type.startsWith('image/')) {
-      setFeedback({ type: 'error', message: 'El archivo debe ser una imagen' })
-      return
-    }
-    if (file.size > 4 * 1024 * 1024) {
-      setFeedback({ type: 'error', message: 'La imagen no puede pesar más de 4MB' })
+    const invalid = validateMediaFile(mediaType, file.type, file.size)
+    if (invalid) {
+      setFeedback({ type: 'error', message: invalid })
       return
     }
 
     setUploadingId(templateId)
     setFeedback(null)
     try {
-      const form = new FormData()
-      form.append('image', file)
+      // Siempre vía signed URL: un video de 16MB no entra en el body de un
+      // route handler de Vercel (límite 4.5MB).
+      const { objectPath } = await uploadTemplateMedia(file, mediaType)
       const response = await fetch(`/api/templates/${templateId}/image`, {
         method: 'POST',
-        body: form,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ objectPath }),
       })
       const result = await response.json()
-      if (!result.success) throw new Error(result.error ?? 'Error subiendo imagen')
+      if (!result.success) throw new Error(result.error ?? 'Error subiendo el archivo')
       setFeedback({
         type: 'success',
-        message: 'Imagen actualizada' + (result.previousDeleted ? ' (anterior eliminada del bucket)' : ''),
+        message:
+          (mediaType === 'VIDEO' ? 'Video actualizado' : 'Imagen actualizada') +
+          (result.previousDeleted ? ' (anterior eliminada del bucket)' : ''),
       })
       router.refresh()
     } catch (error) {
@@ -271,19 +287,23 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {t.headerType === 'IMAGE' && t.headerMediaUrl && (
+                {isMediaHeaderType(t.headerType) && t.headerMediaUrl && (
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs text-muted-foreground">Header (imagen)</p>
+                      <p className="text-xs text-muted-foreground">
+                        Header ({MEDIA_HEADER_RULES[t.headerType].label})
+                      </p>
                       <Button
                         size="sm"
                         variant="outline"
                         disabled={uploadingId === t.id}
-                        onClick={() => handleOpenUpload(t.id)}
+                        onClick={() => handleOpenUpload(t.id, t.headerType as MediaHeaderType)}
                         className="gap-2 h-7 text-xs"
                       >
                         {uploadingId === t.id ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : t.headerType === 'VIDEO' ? (
+                          <Video className="w-3 h-3" />
                         ) : (
                           <ImageIcon className="w-3 h-3" />
                         )}
@@ -291,25 +311,34 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
                       </Button>
                     </div>
                     <div className="bg-muted p-2 rounded-md border border-border">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={t.headerMediaUrl}
-                        alt={`header de ${t.nombre}`}
-                        className="max-h-40 w-full object-contain rounded"
-                      />
+                      {t.headerType === 'VIDEO' ? (
+                        <video
+                          src={t.headerMediaUrl}
+                          controls
+                          preload="metadata"
+                          className="max-h-40 w-full object-contain rounded"
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={t.headerMediaUrl}
+                          alt={`header de ${t.nombre}`}
+                          className="max-h-40 w-full object-contain rounded"
+                        />
+                      )}
                     </div>
                   </div>
                 )}
-                {t.headerType === 'IMAGE' && !t.headerMediaUrl && (
+                {isMediaHeaderType(t.headerType) && !t.headerMediaUrl && (
                   <div className="p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-900 text-sm space-y-2">
                     <p>
-                      ⚠️ Esta plantilla tiene header IMAGE pero no hay URL guardada.
-                      No se puede enviar hasta que subas una imagen.
+                      ⚠️ Esta plantilla tiene header {t.headerType} pero no hay URL guardada.
+                      No se puede previsualizar hasta que subas un archivo.
                     </p>
                     <Button
                       size="sm"
                       disabled={uploadingId === t.id}
-                      onClick={() => handleOpenUpload(t.id)}
+                      onClick={() => handleOpenUpload(t.id, t.headerType as MediaHeaderType)}
                       className="gap-2"
                     >
                       {uploadingId === t.id ? (
@@ -317,11 +346,11 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
                       ) : (
                         <Upload className="w-4 h-4" />
                       )}
-                      Subir imagen
+                      Subir {MEDIA_HEADER_RULES[t.headerType].label}
                     </Button>
                   </div>
                 )}
-                {t.header && t.headerType !== 'IMAGE' && (
+                {t.header && !isMediaHeaderType(t.headerType) && (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Header (texto)</p>
                     <div className="bg-muted p-3 rounded-md border border-border">
@@ -371,11 +400,11 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
         onFinished={() => router.refresh()}
       />
 
-      {/* Input oculto compartido por todos los botones de "subir/reemplazar imagen" */}
+      {/* Input oculto compartido por todos los botones de "subir/reemplazar media" */}
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept={acceptedMimes}
         onChange={handleFileSelected}
         className="hidden"
       />

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { prisma } from '@/lib/prisma'
 import { createMetaTemplate, uploadHeaderMedia } from '@/lib/meta-template-service'
-import { uploadImage } from '@/lib/gcs'
+import { downloadObject, publicUrlFor, uploadImage } from '@/lib/gcs'
+import { isMediaHeaderType, validateMediaFile } from '@/lib/template-media'
 
 export const runtime = 'nodejs'
 
@@ -35,11 +36,18 @@ export async function GET(request: NextRequest) {
 
 // ============================================================================
 // POST /api/templates — crea la template en Meta + opcionalmente la guarda
-// en BD. Dos modos:
-//   - JSON body (text-only): para templates sin imagen, como antes.
-//   - multipart/form-data: si hay header IMAGE, con un campo "image" que es
-//     el archivo. Se sube a GCS (para envíos futuros) y a Meta Resumable
-//     Upload (para el sample de aprobación).
+// en BD. Tres modos, según cómo llega el media del header:
+//   - JSON body sin media: templates TEXT / sin header, como siempre.
+//   - JSON body con headerObjectPath: el navegador ya subió el archivo a GCS
+//     con una signed URL (ver /api/templates/media/upload-url). Es el único
+//     camino viable para VIDEO, porque Vercel corta el body de un route
+//     handler en 4.5MB y un video de header puede pesar hasta 16MB.
+//   - multipart/form-data con campo "image" (o "media"): camino legacy para
+//     imágenes chicas, se mantiene para no romper clientes existentes.
+//
+// En todos los casos con media, los bytes terminan yendo a dos lugares:
+//   - GCS, para poder previsualizar el header en el CRM y reusarlo después.
+//   - Meta Resumable Upload, que devuelve el handle del sample de aprobación.
 // ============================================================================
 
 type TemplateBody = {
@@ -49,7 +57,9 @@ type TemplateBody = {
   categoria?: 'MARKETING' | 'UTILITY' | 'AUTHENTICATION'
   idioma?: string
   header?: string | null
-  headerType?: 'TEXT' | 'IMAGE' | 'NONE'
+  headerType?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'NONE'
+  /** Path del objeto ya subido a GCS con signed URL (ej. "templates/1712-promo.mp4"). */
+  headerObjectPath?: string | null
   footer?: string | null
   botones?: Array<{ type?: string; text: string }> | null
   ejemplos_mensaje?: string[]
@@ -62,7 +72,7 @@ export async function POST(request: NextRequest) {
     const contentType = request.headers.get('content-type') ?? ''
 
     let body: TemplateBody
-    let imageFile: File | null = null
+    let mediaFile: File | null = null
 
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData()
@@ -74,8 +84,9 @@ export async function POST(request: NextRequest) {
         )
       }
       body = JSON.parse(dataField) as TemplateBody
-      const file = form.get('image')
-      if (file instanceof File) imageFile = file
+      // "image" es el nombre histórico del campo; "media" es el genérico.
+      const file = form.get('media') ?? form.get('image')
+      if (file instanceof File) mediaFile = file
     } else {
       body = (await request.json()) as TemplateBody
     }
@@ -87,33 +98,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'mensaje es requerido' }, { status: 400 })
     }
 
-    const wantsImageHeader = body.headerType === 'IMAGE'
-    if (wantsImageHeader && !imageFile) {
+    const mediaHeaderType = isMediaHeaderType(body.headerType) ? body.headerType : null
+    if (mediaHeaderType && !mediaFile && !body.headerObjectPath) {
       return NextResponse.json(
         {
           success: false,
-          error: 'headerType=IMAGE requiere enviar el archivo "image" en un request multipart/form-data',
+          error: `headerType=${mediaHeaderType} requiere headerObjectPath (archivo ya subido a GCS) o el archivo "media" en un request multipart/form-data`,
         },
         { status: 400 },
       )
     }
 
-    // 1. Si hay imagen: subir a GCS + a Meta Resumable Upload
+    // 1. Si hay media: dejarlo en GCS + mandarlo a Meta Resumable Upload
     let headerMediaUrl: string | null = null
     let headerHandle: string | null = null
 
-    if (wantsImageHeader && imageFile) {
-      const arrayBuffer = await imageFile.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-      const fileName = imageFile.name || `image-${Date.now()}.jpg`
-      const contentType = imageFile.type || 'image/jpeg'
+    if (mediaHeaderType) {
+      let buffer: Buffer
+      let fileName: string
+      let fileType: string
 
-      // Upload a GCS (para futuros envíos)
-      const gcs = await uploadImage(buffer, fileName, contentType)
-      headerMediaUrl = gcs.publicUrl
+      if (body.headerObjectPath) {
+        // Ya está en GCS (el navegador lo subió con signed URL): solo bajarlo
+        // para poder reenviárselo a Meta.
+        const object = await downloadObject(body.headerObjectPath)
+        buffer = object.buffer
+        fileName = body.headerObjectPath.split('/').pop() || `header-${Date.now()}`
+        fileType = object.contentType
+        headerMediaUrl = publicUrlFor(body.headerObjectPath)
+      } else {
+        const arrayBuffer = await mediaFile!.arrayBuffer()
+        buffer = Buffer.from(arrayBuffer)
+        fileName = mediaFile!.name || `header-${Date.now()}`
+        fileType = mediaFile!.type
+      }
+
+      const invalid = validateMediaFile(mediaHeaderType, fileType, buffer.length)
+      if (invalid) {
+        return NextResponse.json({ success: false, error: invalid }, { status: 400 })
+      }
+
+      if (!headerMediaUrl) {
+        // Camino multipart: recién acá sube a GCS (para previsualizar después).
+        const gcs = await uploadImage(buffer, fileName, fileType)
+        headerMediaUrl = gcs.publicUrl
+      }
 
       // Upload a Meta (para el sample al aprobar)
-      headerHandle = await uploadHeaderMedia(buffer, fileName, contentType)
+      headerHandle = await uploadHeaderMedia(buffer, fileName, fileType)
     }
 
     // 2. Crear la template en Meta
@@ -122,8 +154,8 @@ export async function POST(request: NextRequest) {
       mensaje: body.mensaje,
       categoria: body.categoria ?? 'MARKETING',
       idioma: body.idioma ?? 'es_CO',
-      header: wantsImageHeader ? null : (body.header ?? null),
-      headerFormat: body.headerType === 'IMAGE' ? 'IMAGE' : 'TEXT',
+      header: mediaHeaderType ? null : (body.header ?? null),
+      headerFormat: mediaHeaderType ?? 'TEXT',
       headerHandle,
       footer: body.footer,
       botones: body.botones,
@@ -143,7 +175,7 @@ export async function POST(request: NextRequest) {
           estadoMeta: metaResult.estadoMeta,
           categoria: body.categoria ?? 'MARKETING',
           idioma: body.idioma ?? 'es_CO',
-          header: wantsImageHeader ? null : (body.header ?? null),
+          header: mediaHeaderType ? null : (body.header ?? null),
           footer: body.footer ?? null,
           botones: body.botones ? (body.botones as object) : undefined,
           headerType: body.headerType === 'NONE' || !body.headerType ? null : body.headerType,
