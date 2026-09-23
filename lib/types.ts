@@ -39,6 +39,9 @@ export interface CampaignContact {
   fechaUltimoPago: string | Date | null
   mesPasado?: string | null
   fechaVencimientoPasado?: string | Date | null
+  // Fec_1raAsamb y Fec_Inscripcion de la tabla de BigQuery seleccionada.
+  fecha1raAsamblea?: string | Date | null
+  fechaInscripcion?: string | Date | null
 }
 
 export interface Campaign {

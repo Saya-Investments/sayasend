@@ -402,6 +402,8 @@ export async function queryBigQueryContactsCobranza(
         CAST(src.\`mes\` AS STRING) AS mes,
         src.\`Fec_Ult_Pag_CCAP\` AS fec_ult_pag_ccap,
         SAFE_CAST(src.\`Mora\` AS NUMERIC) AS mora,
+        SAFE_CAST(src.\`Fec_1raAsamb\` AS DATE) AS fecha_1ra_asamblea,
+        SAFE_CAST(src.\`Fec_Inscripcion\` AS DATE) AS fecha_inscripcion,
         ant.mes_pasado,
         ant.fecha_vencimiento_pasado
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\` src
@@ -457,7 +459,11 @@ export async function queryBigQueryContactsCobranza(
       ANY_VALUE(fec_ult_pag_ccap) AS fecUltPagCcap,
       ANY_VALUE(fec_ult_pag_ccap) AS fechaUltimoPago,
       ANY_VALUE(mes_pasado) AS mesPasado,
-      ANY_VALUE(fecha_vencimiento_pasado) AS fechaVencimientoPasado
+      ANY_VALUE(fecha_vencimiento_pasado) AS fechaVencimientoPasado,
+      -- Cada contrato tiene su propia 1ra asamblea e inscripción: tomamos las
+      -- del primer contrato de \`codigoAsociado\` para que sean coherentes.
+      ANY_VALUE(fecha_1ra_asamblea HAVING MIN contrato) AS fecha1raAsamblea,
+      ANY_VALUE(fecha_inscripcion HAVING MIN contrato) AS fechaInscripcion
     FROM contratos_con_fondos
     GROUP BY dni
     ORDER BY segmento, monto DESC
@@ -500,6 +506,8 @@ export async function queryBigQueryContactsCobranza(
       fechaUltimoPago: toNullableString(row.fechaUltimoPago),
       mesPasado: toNullableString(row.mesPasado),
       fechaVencimientoPasado: toNullableString(row.fechaVencimientoPasado),
+      fecha1raAsamblea: toNullableString(row.fecha1raAsamblea),
+      fechaInscripcion: toNullableString(row.fechaInscripcion),
     }
   })
 
@@ -610,7 +618,9 @@ export async function queryBigQueryContacts(
         sig.fecha_inicio_siguiente AS fecha_asamblea,
         ciclo.fecha_fin_ciclo AS fecha_vencimiento,
         CAST(src.\`mes\` AS STRING) AS mes,
-        src.\`Fec_Ult_Pag_CCAP\` AS fec_ult_pag_ccap
+        src.\`Fec_Ult_Pag_CCAP\` AS fec_ult_pag_ccap,
+        SAFE_CAST(src.\`Fec_1raAsamb\` AS DATE) AS fecha_1ra_asamblea,
+        SAFE_CAST(src.\`Fec_Inscripcion\` AS DATE) AS fecha_inscripcion
       FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.${tableName}\` src
       JOIN ciclo_activo ciclo
         ON CAST(src.\`mes_corte\` AS STRING) = CAST(ciclo.mes_corte_label AS STRING)
@@ -656,7 +666,9 @@ export async function queryBigQueryContacts(
       ANY_VALUE(fecha_vencimiento HAVING MAX IFNULL(cuota, 0)) AS fechaVencimiento,
       ANY_VALUE(mes HAVING MAX IFNULL(cuota, 0)) AS mes,
       ANY_VALUE(fec_ult_pag_ccap HAVING MAX IFNULL(cuota, 0)) AS fecUltPagCcap,
-      ANY_VALUE(fec_ult_pag_ccap HAVING MAX IFNULL(cuota, 0)) AS fechaUltimoPago
+      ANY_VALUE(fec_ult_pag_ccap HAVING MAX IFNULL(cuota, 0)) AS fechaUltimoPago,
+      ANY_VALUE(fecha_1ra_asamblea HAVING MAX IFNULL(cuota, 0)) AS fecha1raAsamblea,
+      ANY_VALUE(fecha_inscripcion HAVING MAX IFNULL(cuota, 0)) AS fechaInscripcion
     FROM contratos_con_fondos
     GROUP BY dni
     ORDER BY segmento, monto DESC
@@ -694,6 +706,8 @@ export async function queryBigQueryContacts(
       mes: addOneMonthToMes(toNullableString(row.mes) ?? ''),
       fecUltPagCcap: toNullableString(row.fecUltPagCcap),
       fechaUltimoPago: toNullableString(row.fechaUltimoPago),
+      fecha1raAsamblea: toNullableString(row.fecha1raAsamblea),
+      fechaInscripcion: toNullableString(row.fechaInscripcion),
     }
   })
 
