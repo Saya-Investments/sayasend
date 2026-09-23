@@ -41,6 +41,14 @@ export function textoEspera(desde: string | null | undefined, slaHoras?: number 
   return { texto: `Esperando ${cuanto}`, vencido: horas > limite }
 }
 
+// Cuánto lleva esperando una tarea derivada (la vista lo da en horas).
+export function textoHorasEsperando(horas: number | null) {
+  if (horas === null) return 'esperando'
+  if (horas < 1) return 'esperando menos de 1 h'
+  if (horas < 48) return `esperando ${Math.round(horas)} h`
+  return `esperando ${Math.round(horas / 24)} días`
+}
+
 // Si el bot está conversando o está callado.
 export function textoEstadoBot(pausadoHasta: string | null, optOut = false) {
   if (optOut) return { texto: 'Cliente en opt-out', alerta: true }

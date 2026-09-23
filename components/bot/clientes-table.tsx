@@ -4,10 +4,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils'
 import { label, RESULTADOS_ACCION, TIPOS_ACCION } from '@/lib/bot/constants'
 import type { ClienteBotFila } from '@/lib/bot/queries'
-import { DeltaScore, EstadoConvBadge, EtapaBadge, MotivoDerivacionBadge, PruebaBadge, ScoreBadge } from './badges'
+import {
+  DeltaScore,
+  EstadoConvBadge,
+  EtapaBadge,
+  MotivoDerivacionBadge,
+  PruebaBadge,
+  ScoreBadge,
+  TipoTareaBadge,
+} from './badges'
 import { AsignarAsesor } from './asignar-asesor'
 import { ClienteAccionesFila } from './cliente-panel'
-import { fechaCorta, fechaHora, telefonoLegible, textoDiasRestantes, textoEstadoBot } from './formato'
+import { fechaCorta, fechaHora, telefonoLegible, textoDiasRestantes, textoEstadoBot, textoHorasEsperando } from './formato'
 
 type Props = {
   clientes: ClienteBotFila[]
@@ -118,10 +126,23 @@ export function ClientesTable({ clientes, hrefBase, mostrarAsesor = false, aseso
                     <span className="text-muted-foreground">sin temas</span>
                   )}
                   {c.derivadaPendiente && (
-                    <div className="mt-1 flex items-center gap-1">
-                      <MotivoDerivacionBadge motivo={c.motivoDerivacion} />
-                      <span className="text-xs text-muted-foreground">derivado</span>
-                    </div>
+                    <>
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        <TipoTareaBadge tipo={c.tipoTarea ?? 'OTROS'} />
+                        {/* El tipo ya dice "Retiro" o "Caja negra": no se repite el motivo. */}
+                        {(c.motivoDerivacion ?? '').toUpperCase() !== c.tipoTarea && (
+                          <MotivoDerivacionBadge motivo={c.motivoDerivacion} />
+                        )}
+                      </div>
+                      <div
+                        className={cn(
+                          'text-xs',
+                          (c.horasEsperando ?? 0) > 24 ? 'font-semibold text-red-600' : 'text-muted-foreground',
+                        )}
+                      >
+                        {textoHorasEsperando(c.horasEsperando)}
+                      </div>
+                    </>
                   )}
                 </TableCell>
                 <TableCell className="text-sm">

@@ -77,6 +77,8 @@ export type ClienteBotFila = {
   nDerivadas: number
   derivadaPendiente: boolean
   motivoDerivacion: string | null
+  tipoTarea: string | null
+  horasEsperando: number | null
   derivadaEn: string | null
   botPausadoHasta: string | null
   ultimaRespuesta: string | null
@@ -114,14 +116,11 @@ export async function listarClientesBot(sesion: Sesion, filtros: FiltrosClientes
   if (filtros.tipoTarea) {
     const tipo =
       filtros.tipoTarea === 'OTROS'
-        ? Prisma.sql`COALESCE(upper(i.tipo), 'OTROS') NOT IN ('RETIRO', 'RECLAMO', 'CAJA_NEGRA', 'PREGUNTA')`
-        : Prisma.sql`upper(i.tipo) = ${filtros.tipoTarea}`
+        ? Prisma.sql`COALESCE(upper(b.tipo), 'OTROS') NOT IN ('RETIRO', 'RECLAMO', 'CAJA_NEGRA', 'PREGUNTA')`
+        : Prisma.sql`upper(b.tipo) = ${filtros.tipoTarea}`
     where.push(Prisma.sql`EXISTS (
-      SELECT 1 FROM sayasend.edu_incidencia i
-      WHERE i.etapa_cliente_id = v.etapa_cliente_id
-        AND i.derivada_en IS NOT NULL AND i.atendida_en IS NULL
-        AND (i.agendada_para IS NULL OR i.agendada_para <= now())
-        AND ${tipo}
+      SELECT 1 FROM sayasend.edu_bandeja_asesor b
+      WHERE b.etapa_cliente_id = v.etapa_cliente_id AND ${tipo}
     )`)
   }
   if (filtros.q) {
@@ -134,20 +133,25 @@ export async function listarClientesBot(sesion: Sesion, filtros: FiltrosClientes
            e.codigos, e.bot_pausado_hasta,
            asig.id_asesor, u.nombre AS asesor_nombre,
            COALESCE(der.pendientes, 0) AS der_pendientes, der.motivo_derivacion, der.derivada_en,
+           der.tipo_tarea, der.horas_esperando,
            ac.tipo AS ac_tipo, ac.resultado AS ac_resultado, ac.created_at AS ac_at, ac.total AS ac_total
     FROM sayasend.edu_estado_actual v
     JOIN sayasend.edu_etapa_cliente e ON e.etapa_cliente_id = v.etapa_cliente_id
     LEFT JOIN sayasend.crm_asignacion asig ON asig.etapa_id = v.etapa_uuid
     LEFT JOIN sayasend.crm_usuarios u ON u.id_usuario = asig.id_asesor
     LEFT JOIN LATERAL (
-      -- Derivaciones pendientes: se filtra por derivada_en, no por estado (un
-      -- retiro se deriva mientras la incidencia sigue ABIERTA).
+      -- Tareas pendientes: salen de la vista edu_bandeja_asesor, que ya trae
+      -- puesto el filtro (derivada, sin atender y sin rellamada agendada). Una
+      -- incidencia existe desde el primer mensaje del cliente, pero el bot la
+      -- trabaja hasta tres veces antes de pasarla a una persona: leyendo
+      -- edu_incidencia aparecerían casos que el bot todavía está resolviendo.
       SELECT count(*)::int AS pendientes,
-             (array_agg(i.motivo_derivacion ORDER BY (i.motivo_derivacion = 'RETIRO') DESC, i.derivada_en))[1] AS motivo_derivacion,
-             min(i.derivada_en) AS derivada_en
-      FROM sayasend.edu_incidencia i
-      WHERE i.etapa_cliente_id = v.etapa_cliente_id
-        AND i.derivada_en IS NOT NULL AND i.atendida_en IS NULL
+             (array_agg(b.motivo_derivacion ORDER BY (b.motivo_derivacion = 'RETIRO') DESC, b.derivada_en))[1] AS motivo_derivacion,
+             (array_agg(b.tipo ORDER BY (b.motivo_derivacion = 'RETIRO') DESC, b.derivada_en))[1] AS tipo_tarea,
+             min(b.derivada_en) AS derivada_en,
+             max(b.horas_esperando) AS horas_esperando
+      FROM sayasend.edu_bandeja_asesor b
+      WHERE b.etapa_cliente_id = v.etapa_cliente_id
     ) der ON true
     LEFT JOIN LATERAL (
       SELECT tipo, resultado, created_at, count(*) OVER ()::int AS total
@@ -185,6 +189,8 @@ export async function listarClientesBot(sesion: Sesion, filtros: FiltrosClientes
       nDerivadas: Number(r.n_derivadas ?? 0),
       derivadaPendiente: Number(r.der_pendientes ?? 0) > 0,
       motivoDerivacion: (r.motivo_derivacion as string | null) ?? null,
+      tipoTarea: r.tipo_tarea ? String(r.tipo_tarea).toUpperCase() : null,
+      horasEsperando: r.horas_esperando === null || r.horas_esperando === undefined ? null : numero(r.horas_esperando),
       derivadaEn: iso(r.derivada_en as Date | null),
       botPausadoHasta: iso(r.bot_pausado_hasta as Date | null),
       ultimaRespuesta: iso(r.ultima_respuesta as Date | null),
@@ -222,34 +228,55 @@ export type ResumenTareas = {
 }
 
 export async function resumenTareas(sesion: Sesion, opciones: { sinAsignar?: boolean } = {}): Promise<ResumenTareas> {
-  const where: Prisma.Sql[] = [Prisma.sql`i.derivada_en IS NOT NULL`]
+  // Lo pendiente sale de la vista edu_bandeja_asesor: ya viene filtrada a lo
+  // que de verdad tiene que atender una persona (derivada, sin atender y sin
+  // rellamada agendada). Lo agendado y lo ya atendido no están en la vista, así
+  // que se cuentan aparte sobre edu_incidencia.
+  const whereVista: Prisma.Sql[] = [Prisma.sql`true`]
+  const whereInc: Prisma.Sql[] = [Prisma.sql`i.derivada_en IS NOT NULL`]
   if (sesion.rol === 'asesor') {
-    where.push(Prisma.sql`e.cliente_id IN (${CLIENTES_DEL_ASESOR(sesion.sub)})`)
+    whereVista.push(Prisma.sql`b.cliente_id IN (${CLIENTES_DEL_ASESOR(sesion.sub)})`)
+    whereInc.push(Prisma.sql`e.cliente_id IN (${CLIENTES_DEL_ASESOR(sesion.sub)})`)
   } else if (opciones.sinAsignar) {
-    where.push(Prisma.sql`asig.id_asesor IS NULL`)
+    whereVista.push(Prisma.sql`asig.id_asesor IS NULL`)
+    whereInc.push(Prisma.sql`asig.id_asesor IS NULL`)
   }
 
-  const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>`
-    SELECT
-      CASE WHEN upper(i.tipo) IN ('RETIRO', 'RECLAMO', 'CAJA_NEGRA', 'PREGUNTA') THEN upper(i.tipo) ELSE 'OTROS' END AS tipo,
-      count(*) FILTER (WHERE i.atendida_en IS NULL AND (i.agendada_para IS NULL OR i.agendada_para <= now()))::int AS pendientes,
-      count(*) FILTER (WHERE i.atendida_en IS NULL AND i.agendada_para > now())::int AS agendadas,
-      count(*) FILTER (WHERE i.atendida_en IS NOT NULL)::int AS completadas,
-      count(*)::int AS total
-    FROM sayasend.edu_incidencia i
-    JOIN sayasend.edu_etapa_cliente e USING (etapa_cliente_id)
-    LEFT JOIN sayasend.crm_asignacion asig ON asig.etapa_id = e.etapa_uuid
-    WHERE ${Prisma.join(where, ' AND ')}
-    GROUP BY 1
-  `
+  const [pendientes, otros] = await Promise.all([
+    prisma.$queryRaw<Array<Record<string, unknown>>>`
+      SELECT CASE WHEN upper(b.tipo) IN ('RETIRO', 'RECLAMO', 'CAJA_NEGRA', 'PREGUNTA') THEN upper(b.tipo) ELSE 'OTROS' END AS tipo,
+             count(*)::int AS pendientes
+      FROM sayasend.edu_bandeja_asesor b
+      LEFT JOIN sayasend.crm_asignacion asig ON asig.etapa_id = b.etapa_uuid
+      WHERE ${Prisma.join(whereVista, ' AND ')}
+      GROUP BY 1
+    `,
+    prisma.$queryRaw<Array<Record<string, unknown>>>`
+      SELECT CASE WHEN upper(i.tipo) IN ('RETIRO', 'RECLAMO', 'CAJA_NEGRA', 'PREGUNTA') THEN upper(i.tipo) ELSE 'OTROS' END AS tipo,
+             count(*) FILTER (WHERE i.atendida_en IS NULL AND i.agendada_para > now())::int AS agendadas,
+             count(*) FILTER (WHERE i.atendida_en IS NOT NULL)::int AS completadas
+      FROM sayasend.edu_incidencia i
+      JOIN sayasend.edu_etapa_cliente e USING (etapa_cliente_id)
+      LEFT JOIN sayasend.crm_asignacion asig ON asig.etapa_id = e.etapa_uuid
+      WHERE ${Prisma.join(whereInc, ' AND ')}
+      GROUP BY 1
+    `,
+  ])
 
-  const porTipo = rows.map((r) => ({
-    tipo: String(r.tipo),
-    pendientes: Number(r.pendientes ?? 0),
-    agendadas: Number(r.agendadas ?? 0),
-    completadas: Number(r.completadas ?? 0),
-    total: Number(r.total ?? 0),
-  }))
+  const acumulado = new Map<string, ResumenTipo>()
+  const fila = (tipo: string) => {
+    const actual = acumulado.get(tipo) ?? { tipo, pendientes: 0, agendadas: 0, completadas: 0, total: 0 }
+    acumulado.set(tipo, actual)
+    return actual
+  }
+  for (const r of pendientes) fila(String(r.tipo)).pendientes = Number(r.pendientes ?? 0)
+  for (const r of otros) {
+    const f = fila(String(r.tipo))
+    f.agendadas = Number(r.agendadas ?? 0)
+    f.completadas = Number(r.completadas ?? 0)
+  }
+
+  const porTipo = [...acumulado.values()].map((t) => ({ ...t, total: t.pendientes + t.agendadas + t.completadas }))
   const suma = (campo: keyof ResumenTipo) => porTipo.reduce((acc, t) => acc + (t[campo] as number), 0)
   const total = suma('total')
   const completadas = suma('completadas')
