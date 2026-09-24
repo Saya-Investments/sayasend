@@ -5,7 +5,7 @@ import { freezeCampaignContacts } from '@/lib/campaign-contacts'
 import { applyManualDates, normalizeManualDates } from '@/lib/manual-dates'
 import { prisma } from '@/lib/prisma'
 import { serializeFilterValue } from '@/lib/segment-filters'
-import type { CreateCampaignPayload, GestionType } from '@/lib/types'
+import type { CreateCampaignPayload, EtapaBot, GestionType } from '@/lib/types'
 
 export const runtime = 'nodejs'
 
@@ -23,6 +23,10 @@ function normalizeTemplateId(templateId?: string | null) {
 
 function normalizeGestionType(value: unknown): GestionType | null {
   return value === 'gestion_cobranza' || value === 'gestion_m0' ? value : null
+}
+
+function normalizeEtapaBot(value: unknown): EtapaBot | null {
+  return value === 'PRE_ADMISION' || value === 'ADMISION' ? value : null
 }
 
 // "YYYY-MM-DD" -> Date en UTC, que es como Prisma guarda las columnas @db.Date
@@ -124,6 +128,8 @@ export async function POST(request: NextRequest) {
           // vuelve a consultar BigQuery el día del envío.
           fechaVencimientoManual: toUtcDate(manualDates.fechaVencimiento ?? null),
           fechaAsambleaManual: toUtcDate(manualDates.fechaAsamblea ?? null),
+          // El Bot Educador atiende a quien responda a una campaña con etapa_bot.
+          etapa_bot: normalizeEtapaBot(body.etapaBot),
         }
 
         const campaign = await tx.campaign.create({ data: campaignData })

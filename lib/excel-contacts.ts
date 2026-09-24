@@ -150,6 +150,40 @@ const FECHA_ASAMBLEA_ALIASES = [
   'asamblea',
 ]
 
+const FECHA_1RA_ASAMBLEA_ALIASES = [
+  'fecha 1ra asamblea',
+  'fecha 1r asamblea',
+  'fecha 1er asamblea',
+  'fecha primera asamblea',
+  'fecha de 1ra asamblea',
+  'fecha de primera asamblea',
+  'fec 1ra asamblea',
+  'fec. 1ra asamblea',
+  'fecha_1ra_asamblea',
+  'fecha 1ra asamb',
+  'fec_1raasamb',
+  'fec 1raasamb',
+  '1ra asamblea',
+  'primera asamblea',
+]
+
+const FECHA_INSCRIPCION_ALIASES = [
+  'fecha inscripcion',
+  'fecha inscripción',
+  'fecha de inscripcion',
+  'fecha de inscripción',
+  'fecha inscrito',
+  'fecha_inscripcion',
+  'fec inscripcion',
+  'fec. inscripcion',
+  'fec inscripción',
+  'fec. inscripción',
+  'fec_inscripcion',
+  'inscripcion',
+  'inscripción',
+  'inscrito',
+]
+
 function normalizeHeader(value: unknown): string {
   return String(value ?? '')
     .trim()
@@ -242,6 +276,8 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
     const montoIdx = findHeaderIndex(headerRow, MONTO_ALIASES)
     const fechaVencimientoIdx = findHeaderIndex(headerRow, FECHA_VENCIMIENTO_ALIASES)
     const fechaAsambleaIdx = findHeaderIndex(headerRow, FECHA_ASAMBLEA_ALIASES)
+    const fecha1raAsambleaIdx = findHeaderIndex(headerRow, FECHA_1RA_ASAMBLEA_ALIASES)
+    const fechaInscripcionIdx = findHeaderIndex(headerRow, FECHA_INSCRIPCION_ALIASES)
 
     if (numDocIdx === -1) {
       return {
@@ -267,6 +303,8 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
     if (montoIdx !== -1) foundOptionalColumns.push('monto')
     if (fechaVencimientoIdx !== -1) foundOptionalColumns.push('fechaVencimiento')
     if (fechaAsambleaIdx !== -1) foundOptionalColumns.push('fechaAsamblea')
+    if (fecha1raAsambleaIdx !== -1) foundOptionalColumns.push('fecha1raAsamblea')
+    if (fechaInscripcionIdx !== -1) foundOptionalColumns.push('fechaInscripcion')
 
     const contacts: CampaignContact[] = []
     const warnings: string[] = []
@@ -299,6 +337,8 @@ export async function parseContactsExcel(file: File): Promise<ExcelParseResult> 
         fechaUltimoPago: null,
         fechaVencimiento: fechaVencimientoIdx !== -1 ? parseFecha(row[fechaVencimientoIdx]) : null,
         fechaAsamblea: fechaAsambleaIdx !== -1 ? parseFecha(row[fechaAsambleaIdx]) : null,
+        fecha1raAsamblea: fecha1raAsambleaIdx !== -1 ? parseFecha(row[fecha1raAsambleaIdx]) : null,
+        fechaInscripcion: fechaInscripcionIdx !== -1 ? parseFecha(row[fechaInscripcionIdx]) : null,
       })
     }
 

@@ -107,6 +107,11 @@ export type CampaignSource = 'bigquery' | 'excel'
 
 export type GestionType = 'gestion_m0' | 'gestion_cobranza'
 
+// Etapa del Bot Educador a la que va la campaña (`campaigns.etapa_bot`). El bot
+// atiende a quien le responda a una campaña marcada; sin marca, no la toma.
+// Los valores los fija el check `ck_campaigns_etapa_bot` de la base.
+export type EtapaBot = 'PRE_ADMISION' | 'ADMISION'
+
 export interface CreateCampaignPayload {
   name: string
   templateId?: string | null
@@ -131,6 +136,8 @@ export interface CreateCampaignPayload {
   // Fechas manuales ("YYYY-MM-DD"): si vienen, sobrescriben la fecha que
   // BigQuery derivó de `ciclos_pago` para todos los contactos de la campaña.
   manualDates?: ManualCampaignDates
+  // Pre-admisión o Admisión del Bot Educador. Sin valor, la campaña no va al bot.
+  etapaBot?: EtapaBot | null
 }
 
 // Sobrescritura manual de fechas. Cada campo es "YYYY-MM-DD" o null (= usar el

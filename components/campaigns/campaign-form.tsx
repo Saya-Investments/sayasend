@@ -21,7 +21,14 @@ import type {
   BigQueryDatabase,
   CampaignSource,
   CreateCampaignPayload,
+  EtapaBot,
 } from '@/lib/types'
+
+const ETAPA_BOT_OPCIONES: Array<{ value: EtapaBot | null; label: string }> = [
+  { value: null, label: 'No va al bot' },
+  { value: 'PRE_ADMISION', label: 'Pre-admisión bot' },
+  { value: 'ADMISION', label: 'Admisión bot' },
+]
 
 type TemplateOption = {
   id: string
@@ -120,6 +127,7 @@ export function CampaignForm() {
   const [contactsPage, setContactsPage] = useState(1)
   const [activeGestionType, setActiveGestionType] = useState<'gestion_m0' | 'gestion_cobranza' | null>(null)
   const [refreshOnSend, setRefreshOnSend] = useState(false)
+  const [etapaBot, setEtapaBot] = useState<EtapaBot | null>(null)
   // Fechas manuales: reemplazan la fecha de vencimiento / asamblea que BigQuery
   // deriva de `ciclos_pago` para todos los contactos de la campaña.
   const [useManualDates, setUseManualDates] = useState(false)
@@ -306,6 +314,7 @@ export function CampaignForm() {
     setUseManualDates(false)
     setManualFechaVencimiento('')
     setManualFechaAsamblea('')
+    setEtapaBot(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -350,6 +359,8 @@ export function CampaignForm() {
       ...(foundOptionalColumns.includes('monto') ? [{ name: 'monto', type: 'FLOAT' }] : []),
       ...(foundOptionalColumns.includes('fechaVencimiento') ? [{ name: 'fechaVencimiento', type: 'DATE' }] : []),
       ...(foundOptionalColumns.includes('fechaAsamblea') ? [{ name: 'fechaAsamblea', type: 'DATE' }] : []),
+      ...(foundOptionalColumns.includes('fecha1raAsamblea') ? [{ name: 'fecha1raAsamblea', type: 'DATE' }] : []),
+      ...(foundOptionalColumns.includes('fechaInscripcion') ? [{ name: 'fechaInscripcion', type: 'DATE' }] : []),
     ]
 
     setExcelFileName(file.name)
@@ -487,6 +498,7 @@ export function CampaignForm() {
       gestionType: source === 'bigquery' ? activeGestionType ?? undefined : undefined,
       refreshOnSend: source === 'bigquery' ? refreshOnSend : false,
       manualDates: manualDates ?? undefined,
+      etapaBot,
     }
 
     const response = await createCampaign(payload)
@@ -712,8 +724,10 @@ export function CampaignForm() {
                   <span className="font-mono">Telefono</span> (o Celular, Movil, Telefono 2…).{' '}
                   Columnas opcionales: <span className="font-mono">Nombre</span>,{' '}
                   <span className="font-mono">Monto</span>,{' '}
-                  <span className="font-mono">Fecha Vencimiento</span> y{' '}
-                  <span className="font-mono">Fecha Asamblea</span> — si están presentes se guardarán en la BD.
+                  <span className="font-mono">Fecha Vencimiento</span>,{' '}
+                  <span className="font-mono">Fecha Asamblea</span>,{' '}
+                  <span className="font-mono">Fecha 1ra Asamblea</span> y{' '}
+                  <span className="font-mono">Fecha Inscripcion</span> — si están presentes se guardarán en la BD.
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Las fechas deben venir con formato de fecha de Excel o como texto{' '}
@@ -861,6 +875,8 @@ export function CampaignForm() {
                         </>
                       )}
                       <TableHead>Fecha Asamblea</TableHead>
+                      <TableHead>Fecha 1ra Asamblea</TableHead>
+                      <TableHead>Fecha Inscripcion</TableHead>
                       <TableHead>Fecha Vencimiento</TableHead>
                       <TableHead>Mes</TableHead>
                       <TableHead>Fec_Ult_Pag_CCAP</TableHead>
@@ -922,6 +938,8 @@ export function CampaignForm() {
                           </>
                         )}
                         <TableCell>{formatDate(contact.fechaAsamblea)}</TableCell>
+                        <TableCell>{formatDate(contact.fecha1raAsamblea)}</TableCell>
+                        <TableCell>{formatDate(contact.fechaInscripcion)}</TableCell>
                         <TableCell>{formatDate(contact.fechaVencimiento)}</TableCell>
                         <TableCell>{contact.mes || '-'}</TableCell>
                         <TableCell>{formatDate(contact.fecUltPagCcap)}</TableCell>
@@ -1137,6 +1155,41 @@ export function CampaignForm() {
                 campaña se marcará como fallida y se enviará un aviso por correo.
               </p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showContacts && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Bot Educador</CardTitle>
+            <CardDescription>
+              Si la campaña es de Pre-admisión o Admisión, márcala para que el bot atienda a
+              los clientes que respondan. Si no, déjala en &quot;No va al bot&quot;.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {ETAPA_BOT_OPCIONES.map((opcion) => (
+                <Button
+                  key={opcion.label}
+                  type="button"
+                  variant={etapaBot === opcion.value ? 'default' : 'outline'}
+                  onClick={() => setEtapaBot(opcion.value)}
+                >
+                  {opcion.label}
+                </Button>
+              ))}
+            </div>
+            {etapaBot && (
+              <p className="text-xs text-muted-foreground">
+                El bot solo puede atender a los clientes que tengan{' '}
+                <span className="font-mono">fecha_inscripcion</span> y{' '}
+                <span className="font-mono">fecha_1ra_asamblea</span> en la base.
+                {source === 'excel' &&
+                  ' Si son clientes nuevos, incluye las columnas Fecha Inscripcion y Fecha 1ra Asamblea en el Excel.'}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
