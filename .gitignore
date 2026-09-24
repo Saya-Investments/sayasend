@@ -26,3 +26,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 database/con telefono.xlsx
+
+# Planillas locales: nunca al repo, suelen traer datos de clientes.
+*.xlsx
+*.xls
+# Archivos de bloqueo de Office (~$archivo.xlsx)
+~$*

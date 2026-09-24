@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const usuario = await prisma.crmUsuario.findUnique({ where: { email } })
-    if (!usuario || !usuario.activo || usuario.passwordHash !== TEMP_HASH) {
+    if (!usuario || !usuario.activo || usuario.passwordHash !== TEMP_HASH || usuario.rol !== 'admin') {
       return NextResponse.json(
         { success: false, error: 'Este usuario no tiene un cambio de contraseña pendiente' },
         { status: 400 },

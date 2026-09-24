@@ -6,6 +6,15 @@ import { normalizarEmail, responderConSesion, TEMP_HASH } from '@/lib/auth/login
 
 export const runtime = 'nodejs'
 
+// Sayasend es solo para admins: los asesores trabajan en el CRM Educador, que
+// comparte la tabla crm_usuarios (mismo correo y contraseña).
+function soloAdmins() {
+  return NextResponse.json(
+    { success: false, error: 'Tu acceso es por el CRM Educador: crmeducador.vercel.app' },
+    { status: 403 },
+  )
+}
+
 // POST /api/auth/login  { email, password }
 // Si el usuario todavía no fijó contraseña responde { setupRequired: true }.
 export async function POST(request: NextRequest) {
@@ -25,10 +34,12 @@ export async function POST(request: NextRequest) {
     if (!usuario || !usuario.activo) return credencialesInvalidas
 
     if (usuario.passwordHash === TEMP_HASH) {
+      if (usuario.rol !== 'admin') return soloAdmins()
       return NextResponse.json({ success: true, data: { setupRequired: true } })
     }
 
     if (!(await bcrypt.compare(password, usuario.passwordHash))) return credencialesInvalidas
+    if (usuario.rol !== 'admin') return soloAdmins()
 
     return responderConSesion(usuario)
   } catch (error) {
