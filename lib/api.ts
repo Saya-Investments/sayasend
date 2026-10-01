@@ -93,6 +93,16 @@ export async function createCampaign(campaignData: any) {
 }
 
 /**
+ * Contactos que se quitarán por estar marcados como retiro en el Bot Educador
+ */
+export async function getRetiroContacts(contacts: Array<{ numDoc: string; codigoAsociado: string }>) {
+  return internalApiCall<Array<{ numDoc: string; codigoAsociado: string }>>('/api/campaigns/retiros', {
+    method: 'POST',
+    body: JSON.stringify({ contacts }),
+  })
+}
+
+/**
  * Send campaign
  */
 export async function sendCampaign(campaignId: string) {

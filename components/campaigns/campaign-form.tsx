@@ -12,6 +12,7 @@ import {
   getBigQueryEstrategias,
   getBigQueryFrentes,
   getBigQueryRangoMontos,
+  getRetiroContacts,
 } from '@/lib/api'
 import { parseContactsExcel } from '@/lib/excel-contacts'
 import { applyManualDates, normalizeManualDate } from '@/lib/manual-dates'
@@ -128,6 +129,9 @@ export function CampaignForm() {
   const [activeGestionType, setActiveGestionType] = useState<'gestion_m0' | 'gestion_cobranza' | null>(null)
   const [refreshOnSend, setRefreshOnSend] = useState(false)
   const [etapaBot, setEtapaBot] = useState<EtapaBot | null>(null)
+  // Contactos marcados como retiro en el Bot Educador: se quitan al crear la
+  // campaña si va al bot. `null` = todavía no se consultó.
+  const [retiroCount, setRetiroCount] = useState<number | null>(null)
   // Fechas manuales: reemplazan la fecha de vencimiento / asamblea que BigQuery
   // deriva de `ciclos_pago` para todos los contactos de la campaña.
   const [useManualDates, setUseManualDates] = useState(false)
@@ -187,6 +191,27 @@ export function CampaignForm() {
 
     return columns
   }, [availableColumns, manualDates])
+  useEffect(() => {
+    if (!etapaBot || filteredContacts.length === 0) {
+      setRetiroCount(null)
+      return
+    }
+
+    let cancelled = false
+    setRetiroCount(null)
+    getRetiroContacts(
+      filteredContacts.map((c) => ({ numDoc: c.numDoc, codigoAsociado: c.codigoAsociado })),
+    ).then((response) => {
+      if (!cancelled && response.success) {
+        setRetiroCount(response.data?.length ?? 0)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [etapaBot, filteredContacts])
+
   const contactsWithoutPhone = filteredContacts.filter(
     (contact) => !contact.telefono || String(contact.telefono).trim() === '',
   ).length
@@ -514,7 +539,10 @@ export function CampaignForm() {
       return
     }
 
-    const successMsg = `Campaña creada correctamente con ${filteredContacts.length} clientes.`
+    const excludedRetiros = (response.data as { excludedRetiros?: number } | undefined)?.excludedRetiros ?? 0
+    const successMsg =
+      `Campaña creada correctamente con ${filteredContacts.length - excludedRetiros} clientes.` +
+      (excludedRetiros > 0 ? ` Se quitaron ${excludedRetiros} marcados como retiro.` : '')
     setSuccessMessage(successMsg)
     setIsCreatingCampaign(false)
     toast.success('Campaña creada exitosamente', {
@@ -755,6 +783,11 @@ export function CampaignForm() {
                       {warning}
                     </p>
                   ))}
+                  {etapaBot && retiroCount !== null && retiroCount > 0 && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Se excluirán {retiroCount} clientes marcados como retiro en el Bot Educador.
+                    </p>
+                  )}
                 </div>
               )}
             </TabsContent>
@@ -836,11 +869,18 @@ export function CampaignForm() {
                     : `Clientes cruzados desde BigQuery para la tabla ${databaseName}`}
                 </CardDescription>
               </div>
-              {contactsWithoutPhone > 0 && (
-                <Badge variant="outline" className="border-destructive/40 text-destructive">
-                  Sin telefono: {contactsWithoutPhone}
-                </Badge>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {etapaBot && retiroCount !== null && retiroCount > 0 && (
+                  <Badge variant="outline" className="border-amber-500/40 text-amber-600">
+                    Excluidos por retiro: {retiroCount}
+                  </Badge>
+                )}
+                {contactsWithoutPhone > 0 && (
+                  <Badge variant="outline" className="border-destructive/40 text-destructive">
+                    Sin telefono: {contactsWithoutPhone}
+                  </Badge>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -1188,6 +1228,15 @@ export function CampaignForm() {
                 <span className="font-mono">fecha_1ra_asamblea</span> en la base.
                 {source === 'excel' &&
                   ' Si son clientes nuevos, incluye las columnas Fecha Inscripcion y Fecha 1ra Asamblea en el Excel.'}
+              </p>
+            )}
+            {etapaBot && (
+              <p className="text-sm">
+                {retiroCount === null
+                  ? 'Revisando clientes marcados como retiro...'
+                  : retiroCount > 0
+                    ? `Se quitarán ${retiroCount} clientes marcados como retiro en el Bot Educador; la campaña quedará con ${filteredContacts.length - retiroCount}.`
+                    : 'Ningún cliente de esta base está marcado como retiro.'}
               </p>
             )}
           </CardContent>

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { freezeCampaignContacts } from '@/lib/campaign-contacts'
 import { applyManualDates, normalizeManualDates } from '@/lib/manual-dates'
 import { prisma } from '@/lib/prisma'
+import { excludeRetiros } from '@/lib/retiros'
 import { serializeFilterValue } from '@/lib/segment-filters'
 import type { CreateCampaignPayload, EtapaBot, GestionType } from '@/lib/types'
 
@@ -100,7 +101,24 @@ export async function POST(request: NextRequest) {
     // aplican aquí (además del formulario) para que queden guardadas en
     // `clientes` venga de donde venga la request.
     const manualDates = normalizeManualDates(body.manualDates)
-    const contacts = applyManualDates(body.contacts, manualDates)
+    const etapaBot = normalizeEtapaBot(body.etapaBot)
+    let contacts = applyManualDates(body.contacts, manualDates)
+
+    // Si la campaña va al Bot Educador, no se les escribe a los clientes que
+    // el bot ya marcó como retiro.
+    let excludedRetiros = 0
+    if (etapaBot) {
+      const { kept, excluded } = await excludeRetiros(contacts)
+      contacts = kept
+      excludedRetiros = excluded.length
+
+      if (contacts.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Todos los contactos están marcados como retiro en el Bot Educador' },
+          { status: 400 },
+        )
+      }
+    }
 
     const isExcelSource = body.databaseName.trim().startsWith('EXCEL:')
     const gestionType = normalizeGestionType(body.gestionType)
@@ -129,7 +147,7 @@ export async function POST(request: NextRequest) {
           fechaVencimientoManual: toUtcDate(manualDates.fechaVencimiento ?? null),
           fechaAsambleaManual: toUtcDate(manualDates.fechaAsamblea ?? null),
           // El Bot Educador atiende a quien responda a una campaña con etapa_bot.
-          etapa_bot: normalizeEtapaBot(body.etapaBot),
+          etapa_bot: etapaBot,
         }
 
         const campaign = await tx.campaign.create({ data: campaignData })
@@ -152,7 +170,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: result,
+      data: { ...result, excludedRetiros },
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'

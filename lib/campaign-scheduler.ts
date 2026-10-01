@@ -5,6 +5,7 @@ import { freezeCampaignContacts } from '@/lib/campaign-contacts'
 import { sendCampaignFailedEmail } from '@/lib/email'
 import { applyManualDates } from '@/lib/manual-dates'
 import { prisma } from '@/lib/prisma'
+import { excludeRetiros } from '@/lib/retiros'
 import { parseFilterValue } from '@/lib/segment-filters'
 
 type SendScheduledCampaignResult = {
@@ -45,6 +46,7 @@ type DueCampaign = {
   frenteFilter: string | null
   fechaVencimientoManual: Date | null
   fechaAsambleaManual: Date | null
+  etapa_bot: string | null
 }
 
 // Date (columna @db.Date, guardada en UTC) -> "YYYY-MM-DD", el formato que
@@ -106,10 +108,15 @@ async function refreshCampaignContacts(campaign: DueCampaign): Promise<number> {
 
   // La base es nueva, pero las fechas que el usuario fijó a mano al crear la
   // campaña siguen mandando sobre las que BigQuery deriva de `ciclos_pago`.
-  const contacts = applyManualDates(payload.contacts, {
+  let contacts = applyManualDates(payload.contacts, {
     fechaVencimiento: toDateString(campaign.fechaVencimientoManual),
     fechaAsamblea: toDateString(campaign.fechaAsambleaManual),
   })
+
+  // Igual que al crearla: si va al Bot Educador, fuera los marcados como retiro.
+  if (campaign.etapa_bot) {
+    contacts = (await excludeRetiros(contacts)).kept
+  }
 
   const linked = await prisma.$transaction(
     async (tx) => {
@@ -151,6 +158,7 @@ export async function sendDueScheduledCampaigns(limit = 5) {
       frenteFilter: true,
       fechaVencimientoManual: true,
       fechaAsambleaManual: true,
+      etapa_bot: true,
     },
   })
 
