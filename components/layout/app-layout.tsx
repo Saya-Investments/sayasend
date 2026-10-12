@@ -9,9 +9,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-auto bg-background">
+        <main className="min-w-0 flex-1 overflow-auto bg-background">
           {children}
         </main>
       </div>

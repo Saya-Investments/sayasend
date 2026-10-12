@@ -98,8 +98,8 @@ export function CampaignsCalendar({ campaigns }: { campaigns: ScheduledCampaign[
 
   return (
     <div className="grid gap-6 lg:grid-cols-[auto_1fr]">
-      <Card className="w-fit">
-        <CardContent className="p-2">
+      <Card className="w-full overflow-hidden lg:w-fit">
+        <CardContent className="flex justify-center p-1 sm:p-2">
           <Calendar
             mode="single"
             selected={selected}
@@ -133,7 +133,7 @@ export function CampaignsCalendar({ campaigns }: { campaigns: ScheduledCampaign[
             dayCampaigns.map((campaign) => (
               <div
                 key={campaign.id}
-                className="flex items-start justify-between gap-3 rounded-lg border border-border p-4"
+                className="flex flex-col items-start justify-between gap-3 rounded-lg border border-border p-4 sm:flex-row"
               >
                 <div className="space-y-1">
                   <p className="font-medium">{campaign.nombre}</p>
@@ -160,8 +160,8 @@ export function CampaignsCalendar({ campaigns }: { campaigns: ScheduledCampaign[
                     )}
                   </div>
                 </div>
-                <Link href={`/campaigns/${campaign.id}`}>
-                  <Button size="sm" variant="ghost" className="gap-2">
+                <Link href={`/campaigns/${campaign.id}`} className="w-full sm:w-auto">
+                  <Button size="sm" variant="ghost" className="w-full gap-2 sm:w-auto">
                     <Eye className="size-4" />
                     Ver
                   </Button>

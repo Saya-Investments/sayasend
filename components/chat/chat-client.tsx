@@ -44,8 +44,10 @@ export function ChatClient() {
     conversations.find((c) => c.phone === selectedPhone) ?? null
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden">
-      <div className="w-80 border-r border-border bg-card flex flex-col">
+    <div className="flex h-[calc(100dvh-64px)] min-h-0 overflow-hidden">
+      <div
+        className={`${selectedPhone ? 'hidden md:flex' : 'flex'} w-full flex-col border-r border-border bg-card md:w-80 md:shrink-0`}
+      >
         <ChatFilters
           campaignId={campaignId}
           onCampaignChange={setCampaignId}
@@ -59,10 +61,13 @@ export function ChatClient() {
           loading={loading}
         />
       </div>
-      <MessageThread
-        conversation={selected}
-        onMessageSent={fetchConversations}
-      />
+      <div className={`${selectedPhone ? 'flex' : 'hidden md:flex'} min-w-0 flex-1`}>
+        <MessageThread
+          conversation={selected}
+          onMessageSent={fetchConversations}
+          onBack={() => setSelectedPhone(null)}
+        />
+      </div>
     </div>
   )
 }

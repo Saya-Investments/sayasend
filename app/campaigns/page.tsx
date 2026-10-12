@@ -28,16 +28,16 @@ export default async function CampaignsPage() {
 
   return (
     <AppLayout>
-      <div className="p-8">
-        <div className="flex justify-between items-center mb-8">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Campañas</h1>
+            <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Campañas</h1>
             <p className="text-muted-foreground mt-2">
               Crea y gestiona tus campañas de mensajería
             </p>
           </div>
-          <Link href="/campaigns/new">
-            <Button className="gap-2">
+          <Link href="/campaigns/new" className="w-full sm:w-auto">
+            <Button className="w-full gap-2 sm:w-auto">
               <Plus className="w-4 h-4" />
               Nueva Campaña
             </Button>

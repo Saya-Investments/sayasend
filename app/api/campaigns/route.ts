@@ -2,9 +2,10 @@ import { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { freezeCampaignContacts } from '@/lib/campaign-contacts'
+import { excludeForBot } from '@/lib/exclusiones-bot'
+import type { ContactoExcluidoBot } from '@/lib/exclusiones-bot-texto'
 import { applyManualDates, normalizeManualDates } from '@/lib/manual-dates'
 import { prisma } from '@/lib/prisma'
-import { excludeRetiros } from '@/lib/retiros'
 import { serializeFilterValue } from '@/lib/segment-filters'
 import type { CreateCampaignPayload, EtapaBot, GestionType } from '@/lib/types'
 
@@ -104,17 +105,17 @@ export async function POST(request: NextRequest) {
     const etapaBot = normalizeEtapaBot(body.etapaBot)
     let contacts = applyManualDates(body.contacts, manualDates)
 
-    // Si la campaña va al Bot Educador, no se les escribe a los clientes que
-    // el bot ya marcó como retiro.
-    let excludedRetiros = 0
+    // Si la campaña va al Bot Educador, no se les escribe a los marcados como
+    // retiro ni, en Pre-admisión, a los que ya tienen un contrato en Admisión.
+    let excluidosBot: ContactoExcluidoBot[] = []
     if (etapaBot) {
-      const { kept, excluded } = await excludeRetiros(contacts)
+      const { kept, excluded } = await excludeForBot(contacts, etapaBot)
       contacts = kept
-      excludedRetiros = excluded.length
+      excluidosBot = excluded
 
       if (contacts.length === 0) {
         return NextResponse.json(
-          { success: false, error: 'Todos los contactos están marcados como retiro en el Bot Educador' },
+          { success: false, error: 'Todos los contactos quedaron excluidos (retiro o contrato en Admisión)' },
           { status: 400 },
         )
       }
@@ -148,6 +149,8 @@ export async function POST(request: NextRequest) {
           fechaAsambleaManual: toUtcDate(manualDates.fechaAsamblea ?? null),
           // El Bot Educador atiende a quien responda a una campaña con etapa_bot.
           etapa_bot: etapaBot,
+          // Quiénes se quitaron y por qué, para mostrarlo en la campaña.
+          excluidos_bot: etapaBot ? (excluidosBot as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         }
 
         const campaign = await tx.campaign.create({ data: campaignData })
@@ -170,7 +173,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { ...result, excludedRetiros },
+      data: { ...result, excluidosBot },
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'

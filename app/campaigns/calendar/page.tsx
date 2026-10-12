@@ -37,16 +37,16 @@ export default async function CampaignsCalendarPage() {
 
   return (
     <AppLayout>
-      <div className="p-8">
-        <div className="mb-8 flex items-center justify-between">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Calendario</h1>
+            <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Calendario</h1>
             <p className="mt-2 text-muted-foreground">
               Historial y próximas campañas programadas
             </p>
           </div>
-          <Link href="/campaigns">
-            <Button variant="outline" className="gap-2">
+          <Link href="/campaigns" className="w-full sm:w-auto">
+            <Button variant="outline" className="w-full gap-2 sm:w-auto">
               <List className="h-4 w-4" />
               Ver lista
             </Button>

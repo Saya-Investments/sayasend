@@ -3,6 +3,9 @@
  * This file contains functions to communicate with the Cloud Run backend
  */
 
+import type { ContactoExcluidoBot } from '@/lib/exclusiones-bot-texto'
+import type { EtapaBot } from '@/lib/types'
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://your-cloud-run-url.run.app'
 
 export interface ApiResponse<T> {
@@ -93,12 +96,16 @@ export async function createCampaign(campaignData: any) {
 }
 
 /**
- * Contactos que se quitarán por estar marcados como retiro en el Bot Educador
+ * Contactos que se quitarán si la campaña va al Bot Educador (retiro, o
+ * contrato en Admisión si es Pre-admisión)
  */
-export async function getRetiroContacts(contacts: Array<{ numDoc: string; codigoAsociado: string }>) {
-  return internalApiCall<Array<{ numDoc: string; codigoAsociado: string }>>('/api/campaigns/retiros', {
+export async function getExclusionesBot(
+  contacts: Array<{ numDoc: string; codigoAsociado: string; nombre: string }>,
+  etapaBot: EtapaBot,
+) {
+  return internalApiCall<ContactoExcluidoBot[]>('/api/campaigns/exclusiones-bot', {
     method: 'POST',
-    body: JSON.stringify({ contacts }),
+    body: JSON.stringify({ contacts, etapaBot }),
   })
 }
 

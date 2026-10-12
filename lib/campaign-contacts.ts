@@ -95,7 +95,7 @@ function buildClienteData(contact: CampaignContact) {
     codigoAsociado: toStringField(contact.codigoAsociado),
     dni: toStringField(contact.numDoc),
     telefono: toStringField(contact.telefono),
-    // Telefono_3 es opcional en DB_BDfondos_actual: se guarda null si no viene,
+    // Telefono_3 es opcional en BD_FONDOS_COL: se guarda null si no viene,
     // en vez de '' como `telefono`, que es NOT NULL.
     telefono3: toStringField(contact.telefono3) || null,
     nombre: contact.nombre || '',

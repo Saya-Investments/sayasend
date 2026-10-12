@@ -12,9 +12,15 @@ import {
   getBigQueryEstrategias,
   getBigQueryFrentes,
   getBigQueryRangoMontos,
-  getRetiroContacts,
+  getExclusionesBot,
 } from '@/lib/api'
 import { parseContactsExcel } from '@/lib/excel-contacts'
+import {
+  MOTIVO_EXCLUSION_LABEL,
+  contarPorMotivo,
+  resumenExclusiones,
+  type ContactoExcluidoBot,
+} from '@/lib/exclusiones-bot-texto'
 import { applyManualDates, normalizeManualDate } from '@/lib/manual-dates'
 import type {
   BigQueryColumn,
@@ -129,9 +135,9 @@ export function CampaignForm() {
   const [activeGestionType, setActiveGestionType] = useState<'gestion_m0' | 'gestion_cobranza' | null>(null)
   const [refreshOnSend, setRefreshOnSend] = useState(false)
   const [etapaBot, setEtapaBot] = useState<EtapaBot | null>(null)
-  // Contactos marcados como retiro en el Bot Educador: se quitan al crear la
-  // campaña si va al bot. `null` = todavía no se consultó.
-  const [retiroCount, setRetiroCount] = useState<number | null>(null)
+  // Contactos que se quitan al crear la campaña si va al bot (retiro, o
+  // contrato en Admisión si es Pre-admisión). `null` = todavía no se consultó.
+  const [excluidosBot, setExcluidosBot] = useState<ContactoExcluidoBot[] | null>(null)
   // Fechas manuales: reemplazan la fecha de vencimiento / asamblea que BigQuery
   // deriva de `ciclos_pago` para todos los contactos de la campaña.
   const [useManualDates, setUseManualDates] = useState(false)
@@ -193,17 +199,18 @@ export function CampaignForm() {
   }, [availableColumns, manualDates])
   useEffect(() => {
     if (!etapaBot || filteredContacts.length === 0) {
-      setRetiroCount(null)
+      setExcluidosBot(null)
       return
     }
 
     let cancelled = false
-    setRetiroCount(null)
-    getRetiroContacts(
-      filteredContacts.map((c) => ({ numDoc: c.numDoc, codigoAsociado: c.codigoAsociado })),
+    setExcluidosBot(null)
+    getExclusionesBot(
+      filteredContacts.map((c) => ({ numDoc: c.numDoc, codigoAsociado: c.codigoAsociado, nombre: c.nombre })),
+      etapaBot,
     ).then((response) => {
       if (!cancelled && response.success) {
-        setRetiroCount(response.data?.length ?? 0)
+        setExcluidosBot(response.data ?? [])
       }
     })
 
@@ -211,6 +218,9 @@ export function CampaignForm() {
       cancelled = true
     }
   }, [etapaBot, filteredContacts])
+
+  const excluidosCount = excluidosBot?.length ?? 0
+  const excluidosPorMotivo = contarPorMotivo(excluidosBot ?? [])
 
   const contactsWithoutPhone = filteredContacts.filter(
     (contact) => !contact.telefono || String(contact.telefono).trim() === '',
@@ -539,10 +549,13 @@ export function CampaignForm() {
       return
     }
 
-    const excludedRetiros = (response.data as { excludedRetiros?: number } | undefined)?.excludedRetiros ?? 0
-    const successMsg =
-      `Campaña creada correctamente con ${filteredContacts.length - excludedRetiros} clientes.` +
-      (excludedRetiros > 0 ? ` Se quitaron ${excludedRetiros} marcados como retiro.` : '')
+    const excluidos = (response.data as { excluidosBot?: ContactoExcluidoBot[] } | undefined)?.excluidosBot ?? []
+    const successMsg = [
+      `Campaña creada correctamente con ${filteredContacts.length - excluidos.length} clientes.`,
+      resumenExclusiones(excluidos),
+    ]
+      .filter(Boolean)
+      .join(' ')
     setSuccessMessage(successMsg)
     setIsCreatingCampaign(false)
     toast.success('Campaña creada exitosamente', {
@@ -705,7 +718,7 @@ export function CampaignForm() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Button
                   onClick={() => handleApplyFilters('gestion_m0')}
                   disabled={isLoadingContacts || !databaseName}
@@ -783,9 +796,9 @@ export function CampaignForm() {
                       {warning}
                     </p>
                   ))}
-                  {etapaBot && retiroCount !== null && retiroCount > 0 && (
+                  {etapaBot && excluidosCount > 0 && (
                     <p className="text-xs text-amber-600 mt-1">
-                      Se excluirán {retiroCount} clientes marcados como retiro en el Bot Educador.
+                      {resumenExclusiones(excluidosBot ?? [], 'Se excluirán')}
                     </p>
                   )}
                 </div>
@@ -870,9 +883,14 @@ export function CampaignForm() {
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
-                {etapaBot && retiroCount !== null && retiroCount > 0 && (
+                {etapaBot && excluidosPorMotivo.admision > 0 && (
                   <Badge variant="outline" className="border-amber-500/40 text-amber-600">
-                    Excluidos por retiro: {retiroCount}
+                    Excluidos por Admisión: {excluidosPorMotivo.admision}
+                  </Badge>
+                )}
+                {etapaBot && excluidosPorMotivo.retiro > 0 && (
+                  <Badge variant="outline" className="border-amber-500/40 text-amber-600">
+                    Excluidos por retiro: {excluidosPorMotivo.retiro}
                   </Badge>
                 )}
                 {contactsWithoutPhone > 0 && (
@@ -990,13 +1008,13 @@ export function CampaignForm() {
               </div>
             )}
             {filteredContacts.length > CONTACTS_PAGE_SIZE && (
-              <div className="mt-4 flex items-center justify-between gap-2">
-                <p className="text-sm text-muted-foreground">
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-center text-sm text-muted-foreground sm:text-left">
                   Mostrando {(safePage - 1) * CONTACTS_PAGE_SIZE + 1}-
                   {Math.min(safePage * CONTACTS_PAGE_SIZE, filteredContacts.length)} de{' '}
                   {filteredContacts.length}
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1231,20 +1249,27 @@ export function CampaignForm() {
               </p>
             )}
             {etapaBot && (
-              <p className="text-sm">
-                {retiroCount === null
-                  ? 'Revisando clientes marcados como retiro...'
-                  : retiroCount > 0
-                    ? `Se quitarán ${retiroCount} clientes marcados como retiro en el Bot Educador; la campaña quedará con ${filteredContacts.length - retiroCount}.`
-                    : 'Ningún cliente de esta base está marcado como retiro.'}
-              </p>
+              <div className="space-y-2 text-sm">
+                <p>
+                  {excluidosBot === null
+                    ? 'Revisando clientes con retiro o con contrato en Admisión...'
+                    : excluidosCount > 0
+                      ? `${resumenExclusiones(excluidosBot, 'Se quitarán')} La campaña quedará con ${filteredContacts.length - excluidosCount}.`
+                      : etapaBot === 'PRE_ADMISION'
+                        ? 'Ningún cliente de esta base está marcado como retiro ni tiene contrato en Admisión.'
+                        : 'Ningún cliente de esta base está marcado como retiro.'}
+                </p>
+                {excluidosCount > 0 && (
+                  <ExcluidosBotTable excluidos={excluidosBot ?? []} />
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
       )}
 
       {showContacts && (
-        <div className="flex gap-3">
+        <div className="flex flex-col-reverse gap-3 sm:flex-row">
           <Button
             size="lg"
             disabled={!canCreateCampaign || isCreatingCampaign}
@@ -1270,6 +1295,38 @@ export function CampaignForm() {
           </Button>
         </div>
       )}
+    </div>
+  )
+}
+
+function ExcluidosBotTable({ excluidos }: { excluidos: ContactoExcluidoBot[] }) {
+  return (
+    <div className="max-h-64 overflow-auto rounded-md border">
+      <table className="w-full text-xs">
+        <thead className="bg-muted/50 text-left">
+          <tr>
+            <th className="px-3 py-2 font-medium">Código asociado</th>
+            <th className="px-3 py-2 font-medium">Num Doc</th>
+            <th className="px-3 py-2 font-medium">Nombre</th>
+            <th className="px-3 py-2 font-medium">Motivo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {excluidos.map((item) => (
+            <tr key={`${item.numDoc}-${item.codigoAsociado}`} className="border-t">
+              <td className="px-3 py-1.5 font-mono">{item.codigoAsociado}</td>
+              <td className="px-3 py-1.5 font-mono">{item.numDoc}</td>
+              <td className="px-3 py-1.5">{item.nombre}</td>
+              <td className="px-3 py-1.5">
+                {MOTIVO_EXCLUSION_LABEL[item.motivo]}
+                {item.codigoEnBase && item.codigoEnBase !== item.codigoAsociado && (
+                  <span className="text-muted-foreground"> ({item.codigoEnBase})</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

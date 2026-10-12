@@ -6,6 +6,7 @@ import { CampaignDetailView } from '@/components/campaigns/campaign-detail-view'
 import { Button } from '@/components/ui/button'
 import { getCampaignContactability } from '@/lib/campaign-contactability'
 import type { CampaignContactability } from '@/lib/campaign-contactability'
+import type { ContactoExcluidoBot } from '@/lib/exclusiones-bot-texto'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -40,6 +41,9 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
     ? {
       ...rawCampaign,
         variableMappings: toVariableMappings(rawCampaign.variableMappings),
+        excluidosBot: Array.isArray(rawCampaign.excluidos_bot)
+          ? (rawCampaign.excluidos_bot as unknown as ContactoExcluidoBot[])
+          : [],
         campaignContacts: rawCampaign.campaignContacts.map((cc) => ({
           ...cc,
           cliente: {
@@ -57,7 +61,7 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
   if (!campaign) {
     return (
       <AppLayout>
-        <div className="p-8 text-center">
+        <div className="p-4 text-center sm:p-8">
           <h1 className="text-2xl font-bold mb-4">Campaña no encontrada</h1>
           <Link href="/campaigns">
             <Button>Volver a Campañas</Button>
@@ -76,16 +80,16 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
 
   return (
     <AppLayout>
-      <div className="p-8 space-y-8">
-        <div className="flex items-center gap-4">
+      <div className="space-y-6 p-4 sm:p-6 lg:space-y-8 lg:p-8">
+        <div className="flex items-start gap-2 sm:items-center sm:gap-4">
           <Link href="/campaigns">
             <Button variant="ghost" size="sm" className="gap-2">
               <ArrowLeft className="w-4 h-4" />
-              Volver
+              <span className="hidden sm:inline">Volver</span>
             </Button>
           </Link>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-foreground">{campaign.nombre}</h1>
+            <h1 className="break-words text-2xl font-bold text-foreground sm:text-3xl">{campaign.nombre}</h1>
             <p className="text-muted-foreground mt-1">
               Creada el {new Date(campaign.createdAt).toLocaleDateString()}
             </p>

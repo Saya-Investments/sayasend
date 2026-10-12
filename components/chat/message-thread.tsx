@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { cn } from '@/lib/utils'
-import { Check, CheckCheck, AlertTriangle, Clock } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, AlertTriangle, Clock } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
 
 import type { Conversation } from './conversations-list'
 import { MessageInput } from './message-input'
@@ -44,9 +46,10 @@ function formatTime(iso: string): string {
 type Props = {
   conversation: Conversation | null
   onMessageSent: () => void
+  onBack?: () => void
 }
 
-export function MessageThread({ conversation, onMessageSent }: Props) {
+export function MessageThread({ conversation, onMessageSent, onBack }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -96,27 +99,40 @@ export function MessageThread({ conversation, onMessageSent }: Props) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
       {/* Header */}
-      <div className="border-b border-border px-6 py-3 bg-card">
-        <h3 className="font-semibold">
-          {conversation.cliente_nombre || conversation.phone}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {conversation.phone}
-          {' · '}
-          {conversation.window_open ? (
-            <span className="text-green-600">Ventana abierta (24h)</span>
-          ) : (
-            <span className="text-amber-600">
-              Ventana cerrada — solo templates
-            </span>
-          )}
-        </p>
+      <div className="flex min-w-0 items-start gap-2 border-b border-border bg-card px-3 py-3 sm:px-6">
+        {onBack && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="-ml-1 shrink-0 md:hidden"
+            onClick={onBack}
+            aria-label="Volver a conversaciones"
+          >
+            <ArrowLeft className="size-5" />
+          </Button>
+        )}
+        <div className="min-w-0">
+          <h3 className="truncate font-semibold">
+            {conversation.cliente_nombre || conversation.phone}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            <span className="break-all">{conversation.phone}</span>
+            {' · '}
+            {conversation.window_open ? (
+              <span className="text-green-600">Ventana abierta (24h)</span>
+            ) : (
+              <span className="text-amber-600">
+                Ventana cerrada — solo templates
+              </span>
+            )}
+          </p>
+        </div>
       </div>
 
       {/* Thread */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-3 sm:p-4">
         {loading && messages.length === 0 ? (
           <div className="text-sm text-muted-foreground">Cargando...</div>
         ) : messages.length === 0 ? (
@@ -137,7 +153,7 @@ export function MessageThread({ conversation, onMessageSent }: Props) {
               >
                 <div
                   className={cn(
-                    'max-w-[70%] rounded-lg px-3 py-2 text-sm',
+                    'max-w-[88%] rounded-lg px-3 py-2 text-sm sm:max-w-[70%]',
                     isOut
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-foreground',

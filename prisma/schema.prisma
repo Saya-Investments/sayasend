@@ -100,6 +100,8 @@ model Campaign {
   etapa_bot              String?           @db.VarChar(20)
   journey_paso           String?           @db.VarChar(30)
   bot_vinculada_at       DateTime?         @db.Timestamptz(6)
+  /// Contactos que no entraron por el Bot Educador: [{codigoAsociado, numDoc, nombre, motivo}].
+  excluidos_bot          Json?
   campaignContacts       CampaignContact[]
   template               Template          @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   mensajeOuts            MensajeOut[]
@@ -209,11 +211,14 @@ model ChatMessage {
   wa_user_id                                                       String?            @db.VarChar(64)
   wa_username                                                      String?            @db.VarChar(64)
   perfil_nombre                                                    String?            @db.VarChar(120)
+  transcripcion                                                    String?
+  transcripcion_motor                                              String?
   cliente                                                          Cliente?           @relation(fields: [clienteId], references: [id], onUpdate: NoAction)
   edu_etapa_cliente                                                edu_etapa_cliente? @relation(fields: [edu_etapa_id], references: [etapa_cliente_id], onUpdate: NoAction, map: "fk_chat_edu_etapa")
   edu_incidencia_chat_messages_edu_incidencia_idToedu_incidencia   edu_incidencia?    @relation("chat_messages_edu_incidencia_idToedu_incidencia", fields: [edu_incidencia_id], references: [incidencia_id], onUpdate: NoAction, map: "fk_chat_edu_inc")
   edu_clasificacion                                                edu_clasificacion?
   edu_incidencia_edu_incidencia_chat_message_origenTochat_messages edu_incidencia[]   @relation("edu_incidencia_chat_message_origenTochat_messages")
+  edu_promesa_pago                                                 edu_promesa_pago[]
   edu_score_evento                                                 edu_score_evento[]
 
   @@index([phone, createdAt(sort: Desc)], map: "idx_chat_messages_phone_created")
@@ -340,6 +345,7 @@ model edu_etapa_cliente {
   clientes               Cliente                  @relation(fields: [cliente_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   edu_incidencia         edu_incidencia[]
   edu_pendiente          edu_pendiente[]
+  edu_promesa_pago       edu_promesa_pago[]
   edu_score_evento       edu_score_evento[]
 
   @@unique([cliente_id, etapa, ciclo], map: "uq_edu_etapa_ciclo")
@@ -372,11 +378,13 @@ model edu_incidencia {
   /// Tipo de tarea para el asesor. Lo calcula la base desde `categoria`:
   /// RECLAMO | RETIRO | CAJA_NEGRA | PREGUNTA.
   tipo                                                            String?                  @default(dbgenerated("\nCASE categoria\n    WHEN 'caja_negra'::text THEN 'CAJA_NEGRA'::text\n    WHEN 'contradictoria'::text THEN 'RECLAMO'::text\n    WHEN 'incompleta'::text THEN 'RECLAMO'::text\n    WHEN 'reclamo_frustracion'::text THEN 'RECLAMO'::text\n    WHEN 'retiro'::text THEN 'RETIRO'::text\n    ELSE 'PREGUNTA'::text\nEND"))
+  retiro_declarado                                                String?
   chat_messages_chat_messages_edu_incidencia_idToedu_incidencia   ChatMessage[]            @relation("chat_messages_edu_incidencia_idToedu_incidencia")
   crmAcciones                                                     CrmAccion[]
   crmAsignacionHistorial                                          CrmAsignacionHistorial[]
   edu_etapa_cliente                                               edu_etapa_cliente        @relation(fields: [etapa_cliente_id], references: [etapa_cliente_id], onDelete: Cascade, onUpdate: NoAction)
   chat_messages_edu_incidencia_chat_message_origenTochat_messages ChatMessage?             @relation("edu_incidencia_chat_message_origenTochat_messages", fields: [chat_message_origen], references: [id], onUpdate: NoAction, map: "fk_inc_chat")
+  edu_promesa_pago                                                edu_promesa_pago[]
   edu_score_evento                                                edu_score_evento[]
 }
 
@@ -411,7 +419,34 @@ model edu_score_evento {
   edu_incidencia    edu_incidencia?   @relation(fields: [incidencia_id], references: [incidencia_id], onUpdate: NoAction)
   chat_messages     ChatMessage?      @relation(fields: [chat_message_id], references: [id], onUpdate: NoAction, map: "fk_score_chat")
 
+  @@unique([chat_message_id, motivo, grupo], map: "uq_score_por_mensaje")
   @@index([etapa_cliente_id, ocurrido_en], map: "idx_edu_score_evento")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model edu_asamblea_prevista {
+  codigo_asociado String   @id
+  fecha_asamblea  DateTime @db.Date
+  nota            String?
+  cargado_en      DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model edu_promesa_pago {
+  promesa_id        BigInt            @id @default(autoincrement())
+  etapa_cliente_id  BigInt
+  incidencia_id     BigInt?
+  chat_message_id   BigInt?
+  fecha_prometida   DateTime          @db.Date
+  texto_cliente     String?
+  prometida_en      DateTime          @default(now()) @db.Timestamptz(6)
+  estado            String            @default("PENDIENTE")
+  cerrada_en        DateTime?         @db.Timestamptz(6)
+  nota              String?
+  chat_messages     ChatMessage?      @relation(fields: [chat_message_id], references: [id], onUpdate: NoAction)
+  edu_etapa_cliente edu_etapa_cliente @relation(fields: [etapa_cliente_id], references: [etapa_cliente_id], onDelete: Cascade, onUpdate: NoAction)
+  edu_incidencia    edu_incidencia?   @relation(fields: [incidencia_id], references: [incidencia_id], onUpdate: NoAction)
 }
 
 enum edu_estado_conv_enum {

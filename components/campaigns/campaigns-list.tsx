@@ -134,6 +134,49 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
     }
   }
 
+  const renderStats = (campaignId: string) => {
+    const row = stats[campaignId]
+    if (!row) {
+      return <Loader2 className="mx-auto size-3.5 animate-spin text-muted-foreground" />
+    }
+
+    const { enviados, fallidos } = row
+    const procesados = enviados + fallidos
+    if (procesados === 0) {
+      return <span className="text-sm text-muted-foreground">—</span>
+    }
+
+    const failRate = fallidos / procesados
+    const grave = failRate >= 0.5
+    return (
+      <div
+        className="flex items-center justify-center gap-3 text-sm"
+        title={`${enviados} enviados · ${fallidos} fallidos`}
+      >
+        <span className="flex items-center gap-1 font-medium tabular-nums text-green-600 dark:text-green-500">
+          <Check className="size-3.5" />
+          {enviados}
+        </span>
+        <span
+          className={`flex items-center gap-1 font-medium tabular-nums ${
+            fallidos > 0 ? 'text-red-600 dark:text-red-500' : 'text-muted-foreground'
+          }`}
+        >
+          <X className="size-3.5" />
+          {fallidos}
+        </span>
+        {grave && (
+          <span
+            className="flex items-center gap-1 font-semibold text-red-600 dark:text-red-500"
+            title={`${Math.round(failRate * 100)}% falló — revisar`}
+          >
+            <AlertTriangle className="size-4" />
+          </span>
+        )}
+      </div>
+    )
+  }
+
   if (campaigns.length === 0) {
     return (
       <div className="border border-dashed border-border rounded-lg p-12 text-center">
@@ -148,7 +191,7 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
     <div className="space-y-2">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div className="relative max-w-sm">
+      <div className="relative w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         <Input
           type="search"
@@ -162,7 +205,77 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
         />
       </div>
 
-      <div className="border border-border rounded-lg overflow-hidden">
+      <div className="space-y-3 md:hidden">
+        {pageItems.length === 0 && (
+          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            No se encontraron campañas para “{query}”.
+          </div>
+        )}
+        {pageItems.map((campaign) => (
+          <div key={campaign.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <Link href={`/campaigns/${campaign.id}`} className="block truncate font-semibold hover:underline">
+                  {campaign.nombre}
+                </Link>
+                <p className="truncate text-sm text-muted-foreground">
+                  {campaign.template?.nombre ?? 'Sin plantilla'}
+                </p>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="ghost" className="-mr-2 -mt-2 shrink-0">
+                    {deletingId === campaign.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <MoreHorizontal className="size-4" />
+                    )}
+                    <span className="sr-only">Acciones</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link href={`/campaigns/${campaign.id}`}>
+                      <Eye className="size-4" />
+                      Ver
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => handleDelete(campaign)}
+                    disabled={campaign.status === 'sending' || deletingId === campaign.id}
+                  >
+                    <Trash2 className="size-4" />
+                    Borrar
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2 border-t pt-3 text-center">
+              <div>
+                <p className="text-xs text-muted-foreground">Estado</p>
+                <Badge className="mt-1" variant={STATUS_VARIANT[campaign.status] ?? 'secondary'}>
+                  {STATUS_LABEL[campaign.status] ?? campaign.status}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Contactos</p>
+                <p className="mt-1 font-semibold tabular-nums">{campaign.totalContacts}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Envíos</p>
+                <div className="mt-1">{renderStats(campaign.id)}</div>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Creada el {new Date(campaign.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-lg border border-border md:block">
         <div>
           <Table className="w-full [&_th]:px-5 [&_td]:px-5">
             <TableHeader>
@@ -197,51 +310,7 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">{campaign.totalContacts}</TableCell>
-                  <TableCell className="text-center">
-                    {(() => {
-                      const row = stats[campaign.id]
-                      if (!row) {
-                        return (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground mx-auto" />
-                        )
-                      }
-
-                      const { enviados, fallidos } = row
-                      const procesados = enviados + fallidos
-                      if (procesados === 0) {
-                        return <span className="text-muted-foreground text-sm">—</span>
-                      }
-                      const failRate = fallidos / procesados
-                      const grave = failRate >= 0.5
-                      return (
-                        <div
-                          className="flex items-center justify-center gap-3 text-sm"
-                          title={`${enviados} enviados · ${fallidos} fallidos`}
-                        >
-                          <span className="flex items-center gap-1 font-medium text-green-600 dark:text-green-500 tabular-nums">
-                            <Check className="w-3.5 h-3.5" />
-                            {enviados}
-                          </span>
-                          <span
-                            className={`flex items-center gap-1 font-medium tabular-nums ${
-                              fallidos > 0 ? 'text-red-600 dark:text-red-500' : 'text-muted-foreground'
-                            }`}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            {fallidos}
-                          </span>
-                          {grave && (
-                            <span
-                              className="flex items-center gap-1 text-red-600 dark:text-red-500 font-semibold"
-                              title={`${Math.round(failRate * 100)}% falló — revisar`}
-                            >
-                              <AlertTriangle className="w-4 h-4" />
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })()}
-                  </TableCell>
+                  <TableCell className="text-center">{renderStats(campaign.id)}</TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center">
                       <DropdownMenu>
@@ -283,16 +352,16 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-sm text-muted-foreground">
+        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-center text-sm text-muted-foreground sm:text-left">
             Mostrando {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} de{' '}
             {filtered.length}
           </p>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <Button
               size="sm"
               variant="outline"
-              className="gap-1"
+              className="gap-1 px-2 sm:px-3"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
             >
@@ -305,7 +374,7 @@ export function CampaignsList({ campaigns }: { campaigns: CampaignRow[] }) {
             <Button
               size="sm"
               variant="outline"
-              className="gap-1"
+              className="gap-1 px-2 sm:px-3"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
             >

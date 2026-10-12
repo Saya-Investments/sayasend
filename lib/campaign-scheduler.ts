@@ -2,10 +2,10 @@ import { Prisma } from '@prisma/client'
 
 import { queryBigQueryContacts, queryBigQueryContactsCobranza } from '@/lib/bigquery'
 import { freezeCampaignContacts } from '@/lib/campaign-contacts'
+import { excludeForBot } from '@/lib/exclusiones-bot'
 import { sendCampaignFailedEmail } from '@/lib/email'
 import { applyManualDates } from '@/lib/manual-dates'
 import { prisma } from '@/lib/prisma'
-import { excludeRetiros } from '@/lib/retiros'
 import { parseFilterValue } from '@/lib/segment-filters'
 
 type SendScheduledCampaignResult = {
@@ -113,9 +113,14 @@ async function refreshCampaignContacts(campaign: DueCampaign): Promise<number> {
     fechaAsamblea: toDateString(campaign.fechaAsambleaManual),
   })
 
-  // Igual que al crearla: si va al Bot Educador, fuera los marcados como retiro.
-  if (campaign.etapa_bot) {
-    contacts = (await excludeRetiros(contacts)).kept
+  // Igual que al crearla: si va al Bot Educador, fuera los marcados como retiro
+  // y, en Pre-admisión, los que ya tienen un contrato en Admisión.
+  const etapaBot = campaign.etapa_bot === 'PRE_ADMISION' || campaign.etapa_bot === 'ADMISION' ? campaign.etapa_bot : null
+  let excluidosBot: Prisma.InputJsonValue | typeof Prisma.DbNull = Prisma.DbNull
+  if (etapaBot) {
+    const { kept, excluded } = await excludeForBot(contacts, etapaBot)
+    contacts = kept
+    excluidosBot = excluded as unknown as Prisma.InputJsonValue
   }
 
   const linked = await prisma.$transaction(
@@ -126,7 +131,7 @@ async function refreshCampaignContacts(campaign: DueCampaign): Promise<number> {
       })
       await tx.campaign.update({
         where: { id: campaign.id },
-        data: { totalContacts: count },
+        data: { totalContacts: count, excluidos_bot: excluidosBot },
       })
       return count
     },

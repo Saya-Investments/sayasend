@@ -25,6 +25,11 @@ import type {
   ContactabilityScope,
   SecondaryContactabilitySummary,
 } from '@/lib/campaign-contactability'
+import {
+  MOTIVO_EXCLUSION_LABEL,
+  resumenExclusiones,
+  type ContactoExcluidoBot,
+} from '@/lib/exclusiones-bot-texto'
 import { parseFilterValue } from '@/lib/segment-filters'
 import type { ContactabilityMetrics } from '@/lib/types'
 
@@ -67,6 +72,8 @@ type CampaignDetail = {
   variableMappings: Record<string, string>
   template: { nombre: string; contenido: string } | null
   campaignContacts: CampaignContactLite[]
+  etapa_bot?: string | null
+  excluidosBot?: ContactoExcluidoBot[]
 }
 
 type Metrics = ContactabilityMetrics
@@ -115,7 +122,7 @@ export function CampaignDetailView({
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-end">
+      <div className="flex justify-stretch sm:justify-end [&>div]:w-full sm:[&>div]:w-auto">
         <SendCampaignButton
           campaignId={campaign.id}
           currentStatus={campaign.status}
@@ -179,6 +186,46 @@ export function CampaignDetailView({
         </Card>
       </div>
 
+      {campaign.excluidosBot && campaign.excluidosBot.length > 0 && (
+        <Card className="border-amber-500/40">
+          <CardHeader>
+            <CardTitle>Excluidos por el Bot Educador ({campaign.excluidosBot.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {resumenExclusiones(campaign.excluidosBot)} No recibirán esta campaña.
+            </p>
+            <div className="border border-border rounded-lg overflow-hidden overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted">
+                    <TableHead>Código</TableHead>
+                    <TableHead>Num Doc</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Motivo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {campaign.excluidosBot.map((item) => (
+                    <TableRow key={`${item.numDoc}-${item.codigoAsociado}`}>
+                      <TableCell className="font-mono">{item.codigoAsociado}</TableCell>
+                      <TableCell className="font-mono">{item.numDoc}</TableCell>
+                      <TableCell>{item.nombre}</TableCell>
+                      <TableCell>
+                        {MOTIVO_EXCLUSION_LABEL[item.motivo]}
+                        {item.codigoEnBase && item.codigoEnBase !== item.codigoAsociado && (
+                          <span className="text-muted-foreground"> ({item.codigoEnBase})</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Contactos ({contacts.length})</CardTitle>
@@ -232,8 +279,8 @@ export function CampaignDetailView({
               </Table>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-muted-foreground">Filas por página</span>
                 <Select
                   value={String(pageSize)}
@@ -259,7 +306,7 @@ export function CampaignDetailView({
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <Button
                   size="sm"
                   variant="outline"
@@ -293,7 +340,7 @@ export function CampaignDetailView({
       {contactability && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-foreground">Contactabilidad</h2>
+            <h2 className="text-xl font-bold text-foreground sm:text-2xl">Contactabilidad</h2>
           </div>
 
           <ContactabilitySection
@@ -359,7 +406,7 @@ function ContactabilitySection({
   children?: ReactNode
 }) {
   return (
-    <section className="rounded-xl border border-border bg-muted/20 p-5 md:p-6 space-y-6">
+    <section className="space-y-6 rounded-xl border border-border bg-muted/20 p-4 sm:p-5 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-xl font-bold text-foreground">{title}</h3>

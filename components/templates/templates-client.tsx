@@ -184,15 +184,15 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
   }
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Plantillas</h1>
+          <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Plantillas</h1>
           <p className="text-muted-foreground mt-2">
             Gestiona tus plantillas de WhatsApp Meta Business
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:flex">
           <Button onClick={handleSync} disabled={syncing} variant="outline" className="gap-2">
             {syncing ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -259,10 +259,10 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
               }`}
             >
               <CardHeader>
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <CardTitle className="text-lg font-mono">{t.nombre}</CardTitle>
+                      <CardTitle className="break-all font-mono text-lg">{t.nombre}</CardTitle>
                       {t.estadoMeta && (
                         <Badge variant={ESTADO_VARIANT[t.estadoMeta] ?? 'secondary'}>
                           {ESTADO_LABEL[t.estadoMeta] ?? t.estadoMeta}
@@ -279,7 +279,7 @@ export function TemplatesClient({ initialTemplates }: { initialTemplates: Templa
                     size="sm"
                     variant="outline"
                     onClick={() => handleDelete(t.id, t.nombre)}
-                    className="gap-2 text-destructive hover:text-destructive"
+                    className="w-full gap-2 text-destructive hover:text-destructive sm:w-auto"
                   >
                     <Trash2 className="w-4 h-4" />
                     Borrar

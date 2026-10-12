@@ -1,0 +1,18 @@
+# Credenciales y configuración local
+.env
+.env.*
+
+# Dependencias y artefactos generados
+node_modules
+.next
+out
+build
+
+# Archivos locales con datos de clientes
+*.xlsx
+*.xls
+~$*
+
+# Artefactos temporales de herramientas
+.codex-*
+.chrome-*

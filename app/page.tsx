@@ -7,10 +7,10 @@ import { Mail, Send, ArrowRight } from 'lucide-react'
 export default function Home() {
   return (
     <AppLayout>
-      <div className="p-8">
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Bienvenido a SAYASEND</h1>
-          <p className="text-lg text-muted-foreground">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className="mb-8 sm:mb-12">
+          <h1 className="mb-2 text-2xl font-bold text-foreground sm:text-4xl">Bienvenido a SAYASEND</h1>
+          <p className="text-base text-muted-foreground sm:text-lg">
             Plataforma de gestión de campañas de email y mensajería
           </p>
         </div>
@@ -67,23 +67,23 @@ export default function Home() {
           </Card>
         </div>
 
-        <div className="mt-12 p-8 bg-card border border-border rounded-lg">
-          <h2 className="text-2xl font-bold mb-4 text-foreground">Quick Start</h2>
+        <div className="mt-8 rounded-lg border border-border bg-card p-4 sm:mt-12 sm:p-8">
+          <h2 className="mb-4 text-xl font-bold text-foreground sm:text-2xl">Quick Start</h2>
           <div className="space-y-3 text-muted-foreground">
-            <p className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">1</span>
+            <p className="flex items-start gap-2">
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
               Create or select a message template
             </p>
-            <p className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">2</span>
+            <p className="flex items-start gap-2">
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
               Create a new campaign and select your target audience
             </p>
-            <p className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">3</span>
+            <p className="flex items-start gap-2">
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span>
               Map template variables to customer data columns
             </p>
-            <p className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">4</span>
+            <p className="flex items-start gap-2">
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">4</span>
               Send the campaign and monitor contactability metrics
             </p>
           </div>

@@ -64,7 +64,7 @@ function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-md rounded-xl border border-border bg-card p-10 shadow-lg">
+    <form onSubmit={handleSubmit} className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg sm:p-10">
       <div className="mb-6 flex items-center justify-center gap-3">
         <Image src="/logo-saya.png" alt="SAYA" width={48} height={48} priority />
         <div className="flex flex-col">

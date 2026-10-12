@@ -49,7 +49,7 @@ export function MessageInput({ phone, windowOpen, onSent }: Props) {
 
   return (
     <div className="border-t border-border bg-card p-3">
-      <div className="flex gap-2 mb-2">
+      <div className="mb-2 grid grid-cols-2 gap-2 sm:flex">
         <Button
           variant={mode === 'text' ? 'default' : 'outline'}
           size="sm"
@@ -116,7 +116,7 @@ function FreeTextInput({
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2 items-end">
+      <div className="flex items-end gap-2">
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -130,7 +130,7 @@ function FreeTextInput({
           rows={2}
           className="resize-none"
         />
-        <Button onClick={handleSend} disabled={!text.trim() || sending}>
+        <Button size="icon" className="shrink-0" onClick={handleSend} disabled={!text.trim() || sending}>
           <Send className="w-4 h-4" />
         </Button>
       </div>

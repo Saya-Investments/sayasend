@@ -141,8 +141,8 @@ export function SendCampaignButton({ campaignId, currentStatus, scheduledAt }: P
   }
 
   return (
-    <div className="flex flex-col gap-2 items-end">
-      <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-col items-stretch gap-2 sm:items-end">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end [&>button]:w-full sm:[&>button]:w-auto">
         {isScheduled ? (
           <Button
             type="button"
