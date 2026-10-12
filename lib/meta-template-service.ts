@@ -179,14 +179,15 @@ export async function createMetaTemplate(input: CreateTemplateInput) {
   const data = (await response.json()) as {
     id?: string
     status?: string
-    error?: { message?: string; code?: number; error_user_msg?: string }
+    error?: { message?: string; code?: number; error_subcode?: number; error_user_msg?: string }
   }
 
   if (!response.ok) {
     const err = new Error(
       data.error?.error_user_msg ?? data.error?.message ?? 'Error creando template en Meta',
-    ) as Error & { metaCode?: number; httpStatus?: number }
+    ) as Error & { metaCode?: number; metaSubcode?: number; httpStatus?: number }
     err.metaCode = data.error?.code
+    err.metaSubcode = data.error?.error_subcode
     err.httpStatus = response.status
     throw err
   }
@@ -196,6 +197,21 @@ export async function createMetaTemplate(input: CreateTemplateInput) {
     estadoMeta: data.status ?? 'PENDING',
     nombreMeta: normalizedName,
   }
+}
+
+/**
+ * true cuando Meta rechazó la creación porque el nombre ya está tomado en ese
+ * idioma aunque no aparezca en la lista: una plantilla eliminada deja el nombre
+ * bloqueado ~4 semanas (subcode 2388023), o ya existe contenido en ese idioma
+ * (2388024). Se mira también el texto por si Meta no manda el subcode.
+ */
+export function esNombreBloqueadoEnMeta(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const subcode = (error as Error & { metaSubcode?: number }).metaSubcode
+  if (subcode === 2388023 || subcode === 2388024) return true
+  return /mientras se elimina|is being deleted|ya existe contenido|content in this language already exists/i.test(
+    error.message,
+  )
 }
 
 export async function getAllMetaTemplates(): Promise<MetaTemplate[]> {

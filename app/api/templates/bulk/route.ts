@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { prisma } from '@/lib/prisma'
-import { createMetaTemplate, getAllMetaTemplates } from '@/lib/meta-template-service'
+import {
+  createMetaTemplate,
+  esNombreBloqueadoEnMeta,
+  getAllMetaTemplates,
+} from '@/lib/meta-template-service'
 import { normalizeTemplateName, resolverNombreUnico } from '@/lib/excel-templates'
 
 export const runtime = 'nodejs'
@@ -24,6 +28,8 @@ export const maxDuration = 300
 
 const MAX_PLANTILLAS_POR_LOTE = 200
 const PAUSA_ENTRE_CREACIONES_MS = 350
+/** Cuántas versiones más se prueban si Meta dice que el nombre está bloqueado. */
+const MAX_REINTENTOS_NOMBRE_BLOQUEADO = 10
 
 type BulkTemplateInput = {
   fila?: number
@@ -166,38 +172,45 @@ export async function POST(request: NextRequest) {
           'Ya existía una plantilla con ese nombre pero con otro mensaje, así que esta se creó como versión en vez de omitirse.'
       }
 
-      let nombreFinal: string
-      try {
-        nombreFinal = resolverNombreUnico(nombreSolicitado, nombresOcupados)
-      } catch (error) {
-        resultados.push({
-          fila,
-          nombreSolicitado,
-          nombreFinal: null,
-          versionado: false,
-          estado: 'error',
-          error: error instanceof Error ? error.message : 'No se pudo generar un nombre único',
-        })
-        continue
-      }
-
-      // Se reserva antes de crear: si la creación falla, igual no queremos que
-      // la siguiente fila del lote reintente con el mismo nombre.
-      nombresOcupados.add(nombreFinal)
-      const versionado = nombreFinal !== nombreSolicitado
+      let nombreFinal: string | null = null
+      let versionado = false
+      // Nombres que Meta rechazó por estar bloqueados (plantilla eliminada hace
+      // poco): no salen en getAllMetaTemplates, así que solo se descubren al crear.
+      const bloqueados: string[] = []
 
       try {
-        const metaResult = await createMetaTemplate({
-          nombre: nombreFinal,
-          mensaje: entrada.mensaje,
-          categoria: entrada.categoria ?? 'MARKETING',
-          idioma: entrada.idioma ?? 'es_CO',
-          header: entrada.header ?? null,
-          headerFormat: 'TEXT',
-          footer: entrada.footer ?? null,
-          ejemplos_mensaje: entrada.ejemplosMensaje?.length ? entrada.ejemplosMensaje : undefined,
-          ejemplos_header: entrada.ejemplosHeader?.length ? entrada.ejemplosHeader : undefined,
-        })
+        let metaResult: Awaited<ReturnType<typeof createMetaTemplate>> | null = null
+        for (let intento = 0; intento <= MAX_REINTENTOS_NOMBRE_BLOQUEADO; intento++) {
+          nombreFinal = resolverNombreUnico(nombreSolicitado, nombresOcupados)
+          // Se reserva antes de crear: si la creación falla, igual no queremos
+          // que la siguiente fila del lote reintente con el mismo nombre.
+          nombresOcupados.add(nombreFinal)
+          versionado = nombreFinal !== nombreSolicitado
+
+          try {
+            metaResult = await createMetaTemplate({
+              nombre: nombreFinal,
+              mensaje: entrada.mensaje,
+              categoria: entrada.categoria ?? 'MARKETING',
+              idioma: entrada.idioma ?? 'es_CO',
+              header: entrada.header ?? null,
+              headerFormat: 'TEXT',
+              footer: entrada.footer ?? null,
+              ejemplos_mensaje: entrada.ejemplosMensaje?.length ? entrada.ejemplosMensaje : undefined,
+              ejemplos_header: entrada.ejemplosHeader?.length ? entrada.ejemplosHeader : undefined,
+            })
+            break
+          } catch (error) {
+            if (!esNombreBloqueadoEnMeta(error) || intento === MAX_REINTENTOS_NOMBRE_BLOQUEADO) throw error
+            bloqueados.push(nombreFinal)
+            await sleep(PAUSA_ENTRE_CREACIONES_MS)
+          }
+        }
+        if (!metaResult) throw new Error('No se pudo crear la plantilla')
+
+        const notaBloqueados = bloqueados.length
+          ? `Meta tenía bloqueado ${bloqueados.join(', ')} (plantilla eliminada hace poco), así que se usó el siguiente nombre libre.`
+          : undefined
 
         await prisma.template.create({
           data: {
@@ -221,7 +234,7 @@ export async function POST(request: NextRequest) {
           versionado,
           estado: 'creada',
           estadoMeta: metaResult.estadoMeta,
-          nota: notaColision,
+          nota: [notaColision, notaBloqueados].filter(Boolean).join(' ') || undefined,
         })
       } catch (error) {
         resultados.push({
