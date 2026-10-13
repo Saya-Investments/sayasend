@@ -755,3 +755,33 @@ export async function queryInscritosPreadmision(asamblea: string): Promise<Recor
   const [rows] = await getBigQueryClient().query({ query, params: { asamblea } })
   return rows.map((row) => serializeBigQueryValue(row) as Record<string, unknown>)
 }
+
+// Tabla donde se acumula, ciclo a ciclo, cada contrato que entró al sorteo de
+// la bienvenida de Pre-admisión (retador o convencional).
+export const TABLA_SORTEO_PREADMISION = 'Preadmision_Bienvenida_Sorteo'
+
+// El ciclo de pago al que pertenece una asamblea objetivo: el que termina justo
+// antes de ella (la asamblea del 10/11 cierra el ciclo 202610 "Octubre 2026").
+export async function cicloDeAsamblea(asamblea: string): Promise<{ mesCorte: string; ciclo: string }> {
+  const query = `
+    SELECT mes_corte, mes_corte_label
+    FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.ciclos_pago\`
+    WHERE fecha_inicio_ciclo < DATE(@asamblea)
+    ORDER BY fecha_inicio_ciclo DESC
+    LIMIT 1
+  `
+  // El parámetro va como texto y se convierte en el SQL: con `types: DATE` el
+  // cliente lo manda mal y la consulta vuelve vacía sin error.
+  const [rows] = await getBigQueryClient().query({ query, params: { asamblea } })
+  if (rows.length === 0) {
+    throw new Error(`ciclos_pago no tiene un ciclo anterior a la asamblea ${asamblea}`)
+  }
+  return { mesCorte: toStringValue(rows[0].mes_corte), ciclo: toStringValue(rows[0].mes_corte_label) }
+}
+
+// Streaming insert: solo agrega filas. `insertId` evita duplicados si un
+// reintento manda la misma fila dos veces.
+export async function insertarSorteoPreadmision(filas: Array<{ insertId: string; json: Record<string, unknown> }>) {
+  if (filas.length === 0) return
+  await getBigQueryClient().dataset(BIGQUERY_DATASET_ID).table(TABLA_SORTEO_PREADMISION).insert(filas, { raw: true })
+}

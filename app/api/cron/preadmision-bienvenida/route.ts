@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { hoyEnColombia, proximaAsamblea } from '@/lib/calendario-colombia'
 import { sendPreadmisionEmail } from '@/lib/email'
 import { correrBienvenidaPreadmision, type ModoCorrida } from '@/lib/preadmision-bienvenida'
-import { excelSorteo, nombreExcelSorteo, type GrupoSorteo } from '@/lib/preadmision-excel'
+import { sincronizarSorteoBigQuery } from '@/lib/preadmision-bigquery'
 import { MINIMO_PARA_SORTEAR } from '@/lib/sorteo-retadores'
 
 export const runtime = 'nodejs'
@@ -23,23 +23,12 @@ function isAuthorized(request: NextRequest) {
   return (request.headers.get('user-agent') ?? '').startsWith('vercel-cron/')
 }
 
-// Vercel llama sin parámetros (= enviar). A mano: ?modo=simular no escribe nada
-// y ?modo=borrador deja la campaña en borrador para revisarla antes de enviar.
-function leerModo(request: NextRequest): ModoCorrida | null {
+// Vercel llama sin parámetros (= enviar). A mano: ?modo=simular no escribe nada,
+// ?modo=borrador deja la campaña en borrador para revisarla antes de enviar y
+// ?modo=sincronizar solo sube a BigQuery lo pendiente, sin sortear ni avisar.
+function leerModo(request: NextRequest): ModoCorrida | 'sincronizar' | null {
   const modo = request.nextUrl.searchParams.get('modo') ?? 'enviar'
-  return modo === 'simular' || modo === 'borrador' || modo === 'enviar' ? modo : null
-}
-
-async function adjuntosDelSorteo(campaignId: string | null, campaignNombre: string | null) {
-  if (!campaignId || !campaignNombre) return undefined
-
-  const grupos: GrupoSorteo[] = ['RETADOR', 'CONVENCIONAL']
-  return Promise.all(
-    grupos.map(async (grupo) => ({
-      filename: nombreExcelSorteo(campaignNombre, grupo),
-      content: (await excelSorteo(campaignId, grupo)).buffer,
-    })),
-  )
+  return modo === 'simular' || modo === 'borrador' || modo === 'enviar' || modo === 'sincronizar' ? modo : null
 }
 
 export async function GET(request: NextRequest) {
@@ -49,29 +38,33 @@ export async function GET(request: NextRequest) {
 
   const modo = leerModo(request)
   if (!modo) {
-    return NextResponse.json({ success: false, error: 'modo debe ser simular, borrador o enviar' }, { status: 400 })
+    return NextResponse.json(
+      { success: false, error: 'modo debe ser simular, borrador, enviar o sincronizar' },
+      { status: 400 },
+    )
+  }
+
+  if (modo === 'sincronizar') {
+    const bigquery = await sincronizarSorteoBigQuery()
+    return NextResponse.json({ success: bigquery.error === null, data: { bigquery } }, { status: bigquery.error ? 500 : 200 })
   }
 
   try {
     const result = await correrBienvenidaPreadmision(modo)
 
     if (modo !== 'simular') {
-      await adjuntosDelSorteo(result.campaignId, result.campaignNombre)
-        .then((adjuntos) =>
-          sendPreadmisionEmail({
-            hoy: result.hoy,
-            asamblea: result.asamblea,
-            estado: result.estado,
-            pendientes: result.pendientes,
-            minimo: MINIMO_PARA_SORTEAR,
-            retadores: result.retadores,
-            convencional: result.convencional,
-            excluidos: result.excluidos,
-            campaignNombre: result.campaignNombre,
-            adjuntos,
-          }),
-        )
-        .catch((error) => console.error('[PreadmisionBienvenida] No se pudo enviar el correo:', error))
+      await sendPreadmisionEmail({
+        hoy: result.hoy,
+        asamblea: result.asamblea,
+        estado: result.estado,
+        pendientes: result.pendientes,
+        minimo: MINIMO_PARA_SORTEAR,
+        retadores: result.retadores,
+        convencional: result.convencional,
+        excluidos: result.excluidos,
+        campaignNombre: result.campaignNombre,
+        bigquery: result.bigquery,
+      }).catch((error) => console.error('[PreadmisionBienvenida] No se pudo enviar el correo:', error))
     }
 
     return NextResponse.json({ success: true, data: result })

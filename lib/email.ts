@@ -167,8 +167,8 @@ export type PreadmisionEmailData = {
   excluidos: Array<{ dni: string; nombre: string; motivo: string }>
   campaignNombre: string | null
   error?: string
-  // Excel de retadores y de convencional, cuando hubo sorteo.
-  adjuntos?: Array<{ filename: string; content: Buffer }>
+  // Subida a CDV_COL.Preadmision_Bienvenida_Sorteo en esta corrida.
+  bigquery?: { filas: number; error: string | null }
 }
 
 function escapeHtml(value: string) {
@@ -215,6 +215,15 @@ export async function sendPreadmisionEmail(data: PreadmisionEmailData) {
         ${listaHtml('Retadores — reciben la bienvenida', data.retadores)}
         ${listaHtml('Convencional — no reciben nada', data.convencional)}
         ${listaHtml('Excluidos', data.excluidos)}
+        ${
+          data.bigquery && (data.bigquery.filas > 0 || data.bigquery.error)
+            ? `<p style="margin: 20px 0 0; font-size: 14px; color: ${data.bigquery.error ? '#b91c1c' : '#334155'};">BigQuery (CDV_COL.Preadmision_Bienvenida_Sorteo): ${
+                data.bigquery.error
+                  ? `no se pudo subir, se reintenta en la próxima corrida. ${escapeHtml(data.bigquery.error)}`
+                  : `${data.bigquery.filas} contrato(s) agregados.`
+              }</p>`
+            : ''
+        }
         <p style="margin: 24px 0 0; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 16px;">
           Sayasend · Motor de Envíos
         </p>
@@ -227,6 +236,5 @@ export async function sendPreadmisionEmail(data: PreadmisionEmailData) {
     to: PREADMISION_RECIPIENTS.join(', '),
     subject: `Pre-admisión ${data.hoy}: ${titulo}`,
     html,
-    attachments: data.adjuntos,
   })
 }

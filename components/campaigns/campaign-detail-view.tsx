@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -112,12 +112,9 @@ const CONTACT_STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default'
 export function CampaignDetailView({
   campaign,
   contactability,
-  sorteo = null,
 }: {
   campaign: CampaignDetail
   contactability: CampaignContactability | null
-  // Solo en campañas de bienvenida de Pre-admisión: personas por grupo del sorteo.
-  sorteo?: { retadores: number; convencional: number } | null
 }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0])
@@ -131,23 +128,7 @@ export function CampaignDetailView({
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-end [&>div]:w-full sm:[&>div]:w-auto">
-        {sorteo && (
-          <>
-            <Button asChild variant="outline" className="gap-2">
-              <a href={`/api/campaigns/${campaign.id}/sorteo-excel?grupo=retador`}>
-                <Download className="w-4 h-4" />
-                Excel retadores ({sorteo.retadores})
-              </a>
-            </Button>
-            <Button asChild variant="outline" className="gap-2">
-              <a href={`/api/campaigns/${campaign.id}/sorteo-excel?grupo=convencional`}>
-                <Download className="w-4 h-4" />
-                Excel convencional ({sorteo.convencional})
-              </a>
-            </Button>
-          </>
-        )}
+      <div className="flex justify-stretch sm:justify-end [&>div]:w-full sm:[&>div]:w-auto">
         <SendCampaignButton
           campaignId={campaign.id}
           currentStatus={campaign.status}

@@ -4,6 +4,7 @@ import { queryInscritosPreadmision } from '@/lib/bigquery'
 import { proximaAsamblea, hoyEnColombia } from '@/lib/calendario-colombia'
 import { freezeCampaignContacts } from '@/lib/campaign-contacts'
 import { excludeForBot } from '@/lib/exclusiones-bot'
+import { sincronizarSorteoBigQuery, type SincronizacionBigQuery } from '@/lib/preadmision-bigquery'
 import { prisma } from '@/lib/prisma'
 import { MINIMO_PARA_SORTEAR, semillaDeCorrida, sortear } from '@/lib/sorteo-retadores'
 import type { CampaignContact } from '@/lib/types'
@@ -27,6 +28,8 @@ const PLANTILLA_BIENVENIDA = 'pre_admision_bot_bienvenida'
 const FRENTE = 'Admision'
 
 export type ModoCorrida = 'simular' | 'borrador' | 'enviar'
+
+const SIN_SUBIDA: SincronizacionBigQuery = { filas: 0, error: null }
 
 type Persona = {
   dni: string
@@ -57,6 +60,8 @@ export type ResultadoCorrida = {
   convencional: PersonaResumen[]
   campaignId: string | null
   campaignNombre: string | null
+  // Subida a CDV_COL.Preadmision_Bienvenida_Sorteo (no corre al simular).
+  bigquery: SincronizacionBigQuery
 }
 
 function texto(value: unknown) {
@@ -182,7 +187,9 @@ export async function correrBienvenidaPreadmision(modo: ModoCorrida, hoy = hoyEn
   }
 
   if (elegibles.length < MINIMO_PARA_SORTEAR) {
-    return { ...base, estado: 'esperando', retadores: [], convencional: [], campaignId: null, campaignNombre: null }
+    // Aunque hoy no se sortee, se reintentan las filas que no llegaron a BigQuery.
+    const bigquery = modo === 'simular' ? SIN_SUBIDA : await sincronizarSorteoBigQuery()
+    return { ...base, estado: 'esperando', retadores: [], convencional: [], campaignId: null, campaignNombre: null, bigquery }
   }
 
   const { retadores, convencional } = sortear(elegibles, (p) => p.dni, semilla)
@@ -193,6 +200,7 @@ export async function correrBienvenidaPreadmision(modo: ModoCorrida, hoy = hoyEn
     convencional: convencional.map(resumen),
     campaignId: null,
     campaignNombre: null,
+    bigquery: SIN_SUBIDA,
   }
 
   if (modo === 'simular') {
@@ -277,5 +285,9 @@ export async function correrBienvenidaPreadmision(modo: ModoCorrida, hoy = hoyEn
     { timeout: 180000, maxWait: 15000 },
   )
 
-  return { ...resultado, campaignId, campaignNombre: nombreCampania }
+  // Después del commit: si BigQuery falla, el sorteo y la campaña ya quedaron
+  // guardados y las filas se suben en la próxima corrida.
+  const bigquery = await sincronizarSorteoBigQuery()
+
+  return { ...resultado, campaignId, campaignNombre: nombreCampania, bigquery }
 }

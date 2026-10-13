@@ -453,22 +453,23 @@ model edu_promesa_pago {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model preadmision_sorteo {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  dni               String    @unique(map: "uq_preadmision_sorteo_dni") @db.VarChar(20)
-  grupo             String    @db.VarChar(15)
-  fecha_corrida     DateTime  @db.Date
-  semilla           BigInt
-  asamblea_objetivo DateTime  @db.Date
-  fecha_inscripcion DateTime? @db.Date
-  nombre            String?   @db.VarChar(150)
-  telefono          String?   @db.VarChar(20)
-  codigos_asociado  String?   @db.VarChar(150)
-  campaign_id       String?   @db.Uuid
-  cliente_id        String?   @db.Uuid
-  datos_bq          Json
-  created_at        DateTime  @default(now()) @db.Timestamptz(6)
-  campaigns         Campaign? @relation(fields: [campaign_id], references: [id], onUpdate: NoAction)
-  clientes          Cliente?  @relation(fields: [cliente_id], references: [id], onUpdate: NoAction)
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dni                String    @unique(map: "uq_preadmision_sorteo_dni") @db.VarChar(20)
+  grupo              String    @db.VarChar(15)
+  fecha_corrida      DateTime  @db.Date
+  semilla            BigInt
+  asamblea_objetivo  DateTime  @db.Date
+  fecha_inscripcion  DateTime? @db.Date
+  nombre             String?   @db.VarChar(150)
+  telefono           String?   @db.VarChar(20)
+  codigos_asociado   String?   @db.VarChar(150)
+  campaign_id        String?   @db.Uuid
+  cliente_id         String?   @db.Uuid
+  datos_bq           Json
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  sincronizado_bq_at DateTime? @db.Timestamptz(6)
+  campaigns          Campaign? @relation(fields: [campaign_id], references: [id], onUpdate: NoAction)
+  clientes           Cliente?  @relation(fields: [cliente_id], references: [id], onUpdate: NoAction)
 
   @@index([fecha_corrida], map: "idx_preadmision_sorteo_fecha")
 }
