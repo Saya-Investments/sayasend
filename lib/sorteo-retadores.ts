@@ -47,5 +47,5 @@ export function sortear<T>(items: T[], clave: (item: T) => string, semilla: numb
   }
 
   const corte = cantidadRetadores(ordenados.length)
-  return { retadores: ordenados.slice(0, corte), control: ordenados.slice(corte) }
+  return { retadores: ordenados.slice(0, corte), convencional: ordenados.slice(corte) }
 }

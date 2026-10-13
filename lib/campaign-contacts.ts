@@ -177,7 +177,8 @@ type FreezeOptions = {
   // Campos que deben sobreescribirse aunque el origen sea Excel. Se usa para
   // las fechas manuales: si el usuario las escribió a mano, mandan sobre lo que
   // ya hubiera en `clientes`, en vez de quedar descartadas por el fill-only.
-  overwriteFields?: Array<'fechaAsamblea' | 'fechaVencimiento'>
+  // El sorteo de Pre-admisión también fija el frente (Admision).
+  overwriteFields?: Array<'fechaAsamblea' | 'fechaVencimiento' | 'frente'>
 }
 
 /**

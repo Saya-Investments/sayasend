@@ -71,6 +71,19 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
     )
   }
 
+  // Campañas de bienvenida de Pre-admisión: cuántos quedaron en cada grupo del
+  // sorteo, para ofrecer el Excel de retadores y el de convencional.
+  const gruposSorteo = await prisma.preadmision_sorteo.groupBy({
+    by: ['grupo'],
+    where: { campaign_id: id },
+    _count: { _all: true },
+  })
+  const contarGrupo = (grupo: string) => gruposSorteo.find((g) => g.grupo === grupo)?._count._all ?? 0
+  const sorteo =
+    gruposSorteo.length > 0
+      ? { retadores: contarGrupo('RETADOR'), convencional: contarGrupo('CONVENCIONAL') }
+      : null
+
   let contactability: CampaignContactability | null = null
   try {
     contactability = await getCampaignContactability(id)
@@ -99,6 +112,7 @@ export default async function CampaignDetailPage({ params }: CampaignDetailPageP
         <CampaignDetailView
           campaign={campaign}
           contactability={contactability}
+          sorteo={sorteo}
         />
       </div>
     </AppLayout>

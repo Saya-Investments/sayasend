@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { hoyEnColombia, proximaAsamblea } from '@/lib/calendario-colombia'
 import { sendPreadmisionEmail } from '@/lib/email'
 import { correrBienvenidaPreadmision, type ModoCorrida } from '@/lib/preadmision-bienvenida'
+import { excelSorteo, nombreExcelSorteo, type GrupoSorteo } from '@/lib/preadmision-excel'
 import { MINIMO_PARA_SORTEAR } from '@/lib/sorteo-retadores'
 
 export const runtime = 'nodejs'
@@ -23,6 +24,18 @@ function leerModo(request: NextRequest): ModoCorrida | null {
   return modo === 'simular' || modo === 'borrador' || modo === 'enviar' ? modo : null
 }
 
+async function adjuntosDelSorteo(campaignId: string | null, campaignNombre: string | null) {
+  if (!campaignId || !campaignNombre) return undefined
+
+  const grupos: GrupoSorteo[] = ['RETADOR', 'CONVENCIONAL']
+  return Promise.all(
+    grupos.map(async (grupo) => ({
+      filename: nombreExcelSorteo(campaignNombre, grupo),
+      content: (await excelSorteo(campaignId, grupo)).buffer,
+    })),
+  )
+}
+
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
@@ -37,17 +50,22 @@ export async function GET(request: NextRequest) {
     const result = await correrBienvenidaPreadmision(modo)
 
     if (modo !== 'simular') {
-      await sendPreadmisionEmail({
-        hoy: result.hoy,
-        asamblea: result.asamblea,
-        estado: result.estado,
-        pendientes: result.pendientes,
-        minimo: MINIMO_PARA_SORTEAR,
-        retadores: result.retadores,
-        control: result.control,
-        excluidos: result.excluidos,
-        campaignNombre: result.campaignNombre,
-      }).catch((error) => console.error('[PreadmisionBienvenida] No se pudo enviar el correo:', error))
+      await adjuntosDelSorteo(result.campaignId, result.campaignNombre)
+        .then((adjuntos) =>
+          sendPreadmisionEmail({
+            hoy: result.hoy,
+            asamblea: result.asamblea,
+            estado: result.estado,
+            pendientes: result.pendientes,
+            minimo: MINIMO_PARA_SORTEAR,
+            retadores: result.retadores,
+            convencional: result.convencional,
+            excluidos: result.excluidos,
+            campaignNombre: result.campaignNombre,
+            adjuntos,
+          }),
+        )
+        .catch((error) => console.error('[PreadmisionBienvenida] No se pudo enviar el correo:', error))
     }
 
     return NextResponse.json({ success: true, data: result })
@@ -63,7 +81,7 @@ export async function GET(request: NextRequest) {
         pendientes: 0,
         minimo: MINIMO_PARA_SORTEAR,
         retadores: [],
-        control: [],
+        convencional: [],
         excluidos: [],
         campaignNombre: null,
         error: message,

@@ -455,7 +455,7 @@ model edu_promesa_pago {
 model preadmision_sorteo {
   id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   dni               String    @unique(map: "uq_preadmision_sorteo_dni") @db.VarChar(20)
-  grupo             String    @db.VarChar(10)
+  grupo             String    @db.VarChar(15)
   fecha_corrida     DateTime  @db.Date
   semilla           BigInt
   asamblea_objetivo DateTime  @db.Date

@@ -163,10 +163,12 @@ export type PreadmisionEmailData = {
   pendientes: number
   minimo: number
   retadores: Array<{ dni: string; nombre: string }>
-  control: Array<{ dni: string; nombre: string }>
+  convencional: Array<{ dni: string; nombre: string }>
   excluidos: Array<{ dni: string; nombre: string; motivo: string }>
   campaignNombre: string | null
   error?: string
+  // Excel de retadores y de convencional, cuando hubo sorteo.
+  adjuntos?: Array<{ filename: string; content: Buffer }>
 }
 
 function escapeHtml(value: string) {
@@ -211,7 +213,7 @@ export async function sendPreadmisionEmail(data: PreadmisionEmailData) {
       <div style="border: 1px solid #e2e8f0; border-top: none; padding: 24px 32px; border-radius: 0 0 8px 8px;">
         <p style="margin: 0; font-size: 15px;">${detalle}</p>
         ${listaHtml('Retadores — reciben la bienvenida', data.retadores)}
-        ${listaHtml('Control — no reciben nada', data.control)}
+        ${listaHtml('Convencional — no reciben nada', data.convencional)}
         ${listaHtml('Excluidos', data.excluidos)}
         <p style="margin: 24px 0 0; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 16px;">
           Sayasend · Motor de Envíos
@@ -225,5 +227,6 @@ export async function sendPreadmisionEmail(data: PreadmisionEmailData) {
     to: PREADMISION_RECIPIENTS.join(', '),
     subject: `Pre-admisión ${data.hoy}: ${titulo}`,
     html,
+    attachments: data.adjuntos,
   })
 }

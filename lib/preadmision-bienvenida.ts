@@ -16,13 +16,15 @@ import type { CampaignContact } from '@/lib/types'
 //    (retiro, contrato en Admisión, opt-out).
 // 3. Si quedan al menos MINIMO_PARA_SORTEAR, sortea el 40% (hacia abajo) como
 //    retadores: reciben la bienvenida en una campaña marcada para el bot. El
-//    resto queda como control y no recibe nada. Si no alcanza, se acumulan
+//    resto queda como convencional y no recibe nada. Si no alcanza, se acumulan
 //    para el día siguiente.
 //
 // La base de BigQuery se actualiza a las 5 am con los inscritos hasta el día
 // anterior, por eso basta con mirar "los que aún no se sortearon".
 
 const PLANTILLA_BIENVENIDA = 'pre_admision_bot_bienvenida'
+// Mismo texto que ya usa `clientes.frente` para Admisión (sin tilde).
+const FRENTE = 'Admision'
 
 export type ModoCorrida = 'simular' | 'borrador' | 'enviar'
 
@@ -52,7 +54,7 @@ export type ResultadoCorrida = {
   pendientes: number
   estado: 'esperando' | 'sorteado'
   retadores: PersonaResumen[]
-  control: PersonaResumen[]
+  convencional: PersonaResumen[]
   campaignId: string | null
   campaignNombre: string | null
 }
@@ -105,6 +107,7 @@ function agruparPorDni(filas: Record<string, unknown>[], asamblea: string): Pers
       fechaAsamblea: asamblea,
       fecha1raAsamblea: asamblea,
       fechaInscripcion: fechas('Fec_Inscripcion')[0] ?? null,
+      frente: FRENTE,
       fecUltPagCcap: fechas('Fec_Ult_Pag_CCAP').at(-1) ?? null,
       fechaUltimoPago: fechas('Fec_Ult_Pag_CCAP').at(-1) ?? null,
     }
@@ -179,15 +182,15 @@ export async function correrBienvenidaPreadmision(modo: ModoCorrida, hoy = hoyEn
   }
 
   if (elegibles.length < MINIMO_PARA_SORTEAR) {
-    return { ...base, estado: 'esperando', retadores: [], control: [], campaignId: null, campaignNombre: null }
+    return { ...base, estado: 'esperando', retadores: [], convencional: [], campaignId: null, campaignNombre: null }
   }
 
-  const { retadores, control } = sortear(elegibles, (p) => p.dni, semilla)
+  const { retadores, convencional } = sortear(elegibles, (p) => p.dni, semilla)
   const resultado: ResultadoCorrida = {
     ...base,
     estado: 'sorteado',
     retadores: retadores.map(resumen),
-    control: control.map(resumen),
+    convencional: convencional.map(resumen),
     campaignId: null,
     campaignNombre: null,
   }
@@ -229,14 +232,15 @@ export async function correrBienvenidaPreadmision(modo: ModoCorrida, hoy = hoyEn
         },
       })
 
-      // Fill-only (como Excel): BD_FONDOS_COL no trae segmento, monto ni frente,
-      // así que no se pisan los de un cliente que ya existía. La fecha de
-      // asamblea sí se sobreescribe porque es la variable del mensaje.
+      // Fill-only (como Excel): BD_FONDOS_COL no trae segmento ni monto, así
+      // que no se pisan los de un cliente que ya existía. La fecha de
+      // asamblea sí se sobreescribe porque es la variable del mensaje, y el
+      // frente porque estos clientes son de Admisión.
       await freezeCampaignContacts(
         tx,
         campaign.id,
         retadores.map((p) => p.contacto),
-        { isExcelSource: true, overwriteFields: ['fechaAsamblea'] },
+        { isExcelSource: true, overwriteFields: ['fechaAsamblea', 'frente'] },
       )
 
       const clientes = await tx.cliente.findMany({
@@ -245,7 +249,7 @@ export async function correrBienvenidaPreadmision(modo: ModoCorrida, hoy = hoyEn
       })
       const clientePorDni = new Map(clientes.map((c) => [c.dni, c.id]))
 
-      const fila = (persona: Persona, grupo: 'RETADOR' | 'CONTROL') => ({
+      const fila = (persona: Persona, grupo: 'RETADOR' | 'CONVENCIONAL') => ({
         dni: persona.dni,
         grupo,
         fecha_corrida: aFechaUtc(hoy)!,
@@ -255,7 +259,9 @@ export async function correrBienvenidaPreadmision(modo: ModoCorrida, hoy = hoyEn
         nombre: resumen(persona).nombre.slice(0, 150),
         telefono: persona.contacto.telefono.slice(0, 20) || null,
         codigos_asociado: persona.contacto.codigoAsociado.slice(0, 150),
-        campaign_id: grupo === 'RETADOR' ? campaign.id : null,
+        // La campaña de la corrida: los dos grupos la llevan, para poder bajar
+        // desde ella el Excel de retadores y el de convencional.
+        campaign_id: campaign.id,
         cliente_id: clientePorDni.get(persona.dni) ?? null,
         datos_bq: persona.filas as Prisma.InputJsonValue,
       })
@@ -263,7 +269,7 @@ export async function correrBienvenidaPreadmision(modo: ModoCorrida, hoy = hoyEn
       // El DNI es único en la tabla: si otra corrida ya sorteó a alguien,
       // esto falla y se deshace todo, campaña incluida.
       await tx.preadmision_sorteo.createMany({
-        data: [...retadores.map((p) => fila(p, 'RETADOR')), ...control.map((p) => fila(p, 'CONTROL'))],
+        data: [...retadores.map((p) => fila(p, 'RETADOR')), ...convencional.map((p) => fila(p, 'CONVENCIONAL'))],
       })
 
       return campaign.id
