@@ -94,6 +94,11 @@ const CONTACT_STATUS_LABEL: Record<string, string> = {
   failed: 'Fallido',
 }
 
+const ETAPA_BOT_LABEL: Record<string, string> = {
+  PRE_ADMISION: 'Pre-admisión',
+  ADMISION: 'Admisión',
+}
+
 const PAGE_SIZE_OPTIONS = [20, 50, 100]
 
 const CONTACT_STATUS_VARIANT: Record<string, 'secondary' | 'outline' | 'default' | 'destructive'> = {
@@ -119,6 +124,7 @@ export function CampaignDetailView({
   const currentPage = Math.min(page, totalPages)
   const startIndex = (currentPage - 1) * pageSize
   const pageItems = contacts.slice(startIndex, startIndex + pageSize)
+  const etapaBotLabel = campaign.etapa_bot ? ETAPA_BOT_LABEL[campaign.etapa_bot] ?? campaign.etapa_bot : null
 
   return (
     <div className="space-y-8">
@@ -143,6 +149,8 @@ export function CampaignDetailView({
             <Field label="Estrategia" value={formatFilterValue(campaign.estrategiaFilter, 'Todas')} />
             <Field label="Frente" value={formatFilterValue(campaign.frenteFilter, 'Todos')} />
             <Field label="Rango Monto" value={formatFilterValue(campaign.rangoMontoFilter, 'Todos')} />
+            <Field label="Enviada al Bot Educador" value={etapaBotLabel ? 'Sí' : 'No'} />
+            {etapaBotLabel && <Field label="Etapa del Bot" value={etapaBotLabel} />}
             <Field
               label="Programada para"
               value={
