@@ -152,3 +152,78 @@ export async function sendCampaignFailedEmail(data: CampaignFailureData) {
     html,
   })
 }
+
+// Resumen diario de la bienvenida de Pre-admisión (Bot Educador).
+const PREADMISION_RECIPIENTS = ['yomira@sayainvestments.co']
+
+export type PreadmisionEmailData = {
+  hoy: string
+  asamblea: string
+  estado: 'esperando' | 'sorteado' | 'error'
+  pendientes: number
+  minimo: number
+  retadores: Array<{ dni: string; nombre: string }>
+  control: Array<{ dni: string; nombre: string }>
+  excluidos: Array<{ dni: string; nombre: string; motivo: string }>
+  campaignNombre: string | null
+  error?: string
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
+}
+
+function listaHtml(titulo: string, personas: Array<{ dni: string; nombre: string; motivo?: string }>) {
+  if (personas.length === 0) return ''
+  const filas = personas
+    .map(
+      (p) =>
+        `<li style="margin: 2px 0;">${escapeHtml(p.nombre)} · ${escapeHtml(p.dni)}${p.motivo ? ` · <em>${escapeHtml(p.motivo)}</em>` : ''}</li>`,
+    )
+    .join('')
+  return `<h3 style="margin: 20px 0 6px; font-size: 15px; color: #0f172a;">${titulo} (${personas.length})</h3><ul style="margin: 0; padding-left: 20px; font-size: 14px;">${filas}</ul>`
+}
+
+export async function sendPreadmisionEmail(data: PreadmisionEmailData) {
+  const transporter = getTransporter()
+  const from = process.env.GMAIL_USER
+
+  const titulo =
+    data.estado === 'sorteado'
+      ? `Bienvenida enviada a ${data.retadores.length} retadores`
+      : data.estado === 'esperando'
+        ? 'Hoy no se envió: se acumulan inscritos'
+        : 'Error en la corrida'
+
+  const detalle =
+    data.estado === 'sorteado'
+      ? `Se creó la campaña <strong>${escapeHtml(data.campaignNombre ?? '')}</strong>, marcada para el Bot Educador (Pre-admisión).`
+      : data.estado === 'esperando'
+        ? `Hay ${data.pendientes} inscrito(s) sin sortear; se necesitan al menos ${data.minimo}.`
+        : escapeHtml(data.error ?? 'Error desconocido')
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+      <div style="background: ${data.estado === 'error' ? '#7f1d1d' : '#0f172a'}; padding: 24px 32px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px;">Pre-admisión · ${titulo}</h1>
+        <p style="color: #94a3b8; margin: 4px 0 0; font-size: 14px;">Corrida del ${data.hoy} · 1ra asamblea ${data.asamblea}</p>
+      </div>
+      <div style="border: 1px solid #e2e8f0; border-top: none; padding: 24px 32px; border-radius: 0 0 8px 8px;">
+        <p style="margin: 0; font-size: 15px;">${detalle}</p>
+        ${listaHtml('Retadores — reciben la bienvenida', data.retadores)}
+        ${listaHtml('Control — no reciben nada', data.control)}
+        ${listaHtml('Excluidos', data.excluidos)}
+        <p style="margin: 24px 0 0; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+          Sayasend · Motor de Envíos
+        </p>
+      </div>
+    </div>
+  `
+
+  await transporter.sendMail({
+    from: `"Sayasend" <${from}>`,
+    to: PREADMISION_RECIPIENTS.join(', '),
+    subject: `Pre-admisión ${data.hoy}: ${titulo}`,
+    html,
+  })
+}

@@ -740,3 +740,18 @@ export async function queryBigQueryContacts(
     contacts,
   }
 }
+
+// Inscritos ACTIVOS cuya 1ra asamblea es `asamblea` ("YYYY-MM-DD"), con TODAS
+// las columnas de BD_FONDOS_COL: una fila por contrato, ya serializada.
+export async function queryInscritosPreadmision(asamblea: string): Promise<Record<string, unknown>[]> {
+  const query = `
+    SELECT *
+    FROM \`${BIGQUERY_PROJECT_ID}.${BIGQUERY_DATASET_ID}.BD_FONDOS_COL\`
+    WHERE \`Estado_Asociado\` = 'ACTIVO'
+      AND DATE(\`Fec_1raAsamb\`) = @asamblea
+      AND \`Num_Doc\` IS NOT NULL
+  `
+
+  const [rows] = await getBigQueryClient().query({ query, params: { asamblea } })
+  return rows.map((row) => serializeBigQueryValue(row) as Record<string, unknown>)
+}

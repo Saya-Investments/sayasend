@@ -104,8 +104,8 @@ const clientes = await prisma.cliente.findMany({
     id: true,
     dni: true,
     codigoAsociado: true,
-    fecha_1ra_asamblea: true,
-    fecha_inscripcion: true,
+    fecha1raAsamblea: true,
+    fechaInscripcion: true,
   },
 })
 
@@ -130,8 +130,8 @@ for (const cliente of clientes) {
   }
 
   const data = {}
-  if (fila.f1 && fila.f1 !== fechaBd(cliente.fecha_1ra_asamblea)) data.fecha_1ra_asamblea = aDateUtc(fila.f1)
-  if (fila.fi && fila.fi !== fechaBd(cliente.fecha_inscripcion)) data.fecha_inscripcion = aDateUtc(fila.fi)
+  if (fila.f1 && fila.f1 !== fechaBd(cliente.fecha1raAsamblea)) data.fecha1raAsamblea = aDateUtc(fila.f1)
+  if (fila.fi && fila.fi !== fechaBd(cliente.fechaInscripcion)) data.fechaInscripcion = aDateUtc(fila.fi)
   if (Object.keys(data).length > 0) cambios.push({ cliente, data })
 }
 
@@ -154,7 +154,7 @@ if (APPLY && cambios.length > 0) {
   const LOTE = 1000
   for (let i = 0; i < cambios.length; i += LOTE) {
     const valores = cambios.slice(i, i + LOTE).map(({ cliente, data }) =>
-      Prisma.sql`(${cliente.id}::uuid, ${fechaBd(data.fecha_1ra_asamblea)}::date, ${fechaBd(data.fecha_inscripcion)}::date)`,
+      Prisma.sql`(${cliente.id}::uuid, ${fechaBd(data.fecha1raAsamblea)}::date, ${fechaBd(data.fechaInscripcion)}::date)`,
     )
     await prisma.$executeRaw`
       UPDATE sayasend.clientes AS c SET

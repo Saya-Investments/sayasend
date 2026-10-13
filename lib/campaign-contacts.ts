@@ -80,8 +80,8 @@ type ExistingClienteFields = {
   fechaVencimiento: Date | null
   fecUltPagCcap: Date | null
   fechaVencimientoPasado: Date | null
-  fecha_1ra_asamblea: Date | null
-  fecha_inscripcion: Date | null
+  fecha1raAsamblea: Date | null
+  fechaInscripcion: Date | null
 }
 
 const isBlankStr = (v: unknown) =>
@@ -118,8 +118,8 @@ function buildClienteData(contact: CampaignContact) {
     mes: contact.mes || null,
     mesPasado: (contact.mesPasado as string | null | undefined) || null,
     fechaVencimientoPasado: toNullableDate(contact.fechaVencimientoPasado as string | null | undefined),
-    fecha_1ra_asamblea: toNullableDate(contact.fecha1raAsamblea),
-    fecha_inscripcion: toNullableDate(contact.fechaInscripcion),
+    fecha1raAsamblea: toNullableDate(contact.fecha1raAsamblea),
+    fechaInscripcion: toNullableDate(contact.fechaInscripcion),
   }
 }
 
@@ -153,8 +153,8 @@ function buildFillOnlyData(
   if (existing.fechaVencimiento === null && fresh.fechaVencimiento) fill.fechaVencimiento = fresh.fechaVencimiento
   if (existing.fecUltPagCcap === null && fresh.fecUltPagCcap) fill.fecUltPagCcap = fresh.fecUltPagCcap
   if (existing.fechaVencimientoPasado === null && fresh.fechaVencimientoPasado) fill.fechaVencimientoPasado = fresh.fechaVencimientoPasado
-  if (existing.fecha_1ra_asamblea === null && fresh.fecha_1ra_asamblea) fill.fecha_1ra_asamblea = fresh.fecha_1ra_asamblea
-  if (existing.fecha_inscripcion === null && fresh.fecha_inscripcion) fill.fecha_inscripcion = fresh.fecha_inscripcion
+  if (existing.fecha1raAsamblea === null && fresh.fecha1raAsamblea) fill.fecha1raAsamblea = fresh.fecha1raAsamblea
+  if (existing.fechaInscripcion === null && fresh.fechaInscripcion) fill.fechaInscripcion = fresh.fechaInscripcion
 
   // Montos: el principal se rellena si la BD es 0/null y el Excel trae > 0;
   // monto1/2/3 y probabilidad si la BD está null y el Excel no.
@@ -229,8 +229,8 @@ export async function freezeCampaignContacts(
       fechaVencimiento: true,
       fecUltPagCcap: true,
       fechaVencimientoPasado: true,
-      fecha_1ra_asamblea: true,
-      fecha_inscripcion: true,
+      fecha1raAsamblea: true,
+      fechaInscripcion: true,
     },
   })
 
