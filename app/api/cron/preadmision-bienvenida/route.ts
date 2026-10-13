@@ -10,11 +10,17 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-// A diferencia de los otros crons, este manda mensajes: sin CRON_SECRET
-// configurado no corre, en vez de quedar abierto.
+// A diferencia de los otros crons, este manda mensajes, así que no queda
+// abierto: con CRON_SECRET exige el Bearer; sin él (hoy no está en Vercel, y
+// configurarlo cerraría también notify-completed-campaigns) solo acepta al cron
+// de Vercel, que llama con `user-agent: vercel-cron/1.0`.
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET
-  return Boolean(secret) && request.headers.get('authorization') === `Bearer ${secret}`
+  if (secret) {
+    return request.headers.get('authorization') === `Bearer ${secret}`
+  }
+
+  return (request.headers.get('user-agent') ?? '').startsWith('vercel-cron/')
 }
 
 // Vercel llama sin parámetros (= enviar). A mano: ?modo=simular no escribe nada
