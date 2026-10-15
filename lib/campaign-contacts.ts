@@ -267,7 +267,17 @@ export async function freezeCampaignContacts(
           toUpdate.push({ id: existingId, data: fill })
         }
       } else {
-        toUpdate.push({ id: existingId, data })
+        // BigQuery sobreescribe, salvo las fechas que necesita el Bot Educador:
+        // si BigQuery las trae vacías, no borrar las que ya había.
+        const { fecha1raAsamblea, fechaInscripcion, ...rest } = data
+        toUpdate.push({
+          id: existingId,
+          data: {
+            ...rest,
+            ...(fecha1raAsamblea ? { fecha1raAsamblea } : {}),
+            ...(fechaInscripcion ? { fechaInscripcion } : {}),
+          },
+        })
       }
       existingClienteIds.push(existingId)
     } else {
