@@ -232,8 +232,12 @@ export async function freezeCampaignContacts(
       fechaVencimientoPasado: true,
       fecha1raAsamblea: true,
       fechaInscripcion: true,
+      opt_out: true,
     },
   })
+
+  // Clientes marcados como opt_out no entran a ninguna campaña.
+  const optOutIds = new Set(existingClientes.filter((c) => c.opt_out).map((c) => c.id))
 
   const byDni = new Map(existingClientes.map((c) => [c.dni, c.id]))
   const byCodigo = new Map(existingClientes.map((c) => [c.codigoAsociado, c.id]))
@@ -279,7 +283,7 @@ export async function freezeCampaignContacts(
           },
         })
       }
-      existingClienteIds.push(existingId)
+      if (!optOutIds.has(existingId)) existingClienteIds.push(existingId)
     } else {
       if ((dni && seenDnis.has(dni)) || (codigo && seenCodigos.has(codigo))) {
         continue
